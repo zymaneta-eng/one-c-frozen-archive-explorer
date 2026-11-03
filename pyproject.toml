@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "one-c-frozen-archive-explorer"
+version = "1.0.0"
+description = "Автономне (Air-Gapped) сховище та пошуковий рушій первинної бухгалтерії 1C/BAS згідно з п. 44.3 ст. 44 ПКУ"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Nataliia Zyma", email = "zymaneta@gmail.com" }
+]
+dependencies = [
+    "duckdb>=1.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "jinja2>=3.1.0",
+    "openpyxl>=3.1.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "python-multipart>=0.0.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+]
+
+[project.scripts]
+one-c-archive = "one_c_frozen_archive_explorer.server:main"
+one-c-generator = "one_c_frozen_archive_explorer.generator:main"
+one-c-importer = "one_c_frozen_archive_explorer.freeze_importer:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
