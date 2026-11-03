@@ -56,7 +56,7 @@ However, **Article 44.3 of the Tax Code of Ukraine (ПКУ)** legally mandates t
 
 ## 📊 Performance & Compression Benchmarks
 
-Tested on a real-world benchmark accounting vault (100 counterparties, 1,000 primary invoices/acts, 2,019 line items, 31.96 Billion UAH total historical turnover):
+Tested on a real-world benchmark accounting vault (100 counterparties, 1,000 primary invoices/acts, 2,019 line items, 45.32 Million UAH total historical turnover):
 
 | Operation / Query Target | Match Results | Latency | Status |
 | :--- | :--- | :--- | :--- |
@@ -77,17 +77,17 @@ Tested on a real-world benchmark accounting vault (100 counterparties, 1,000 pri
 
 ```
 +------------------------------------------------------------------------------------+
-|  1C FROZEN ARCHIVE EXPLORER -- HISTORICAL ACCOUNTING VAULT                         |
-|  [Air-Gapped: Localhost 127.0.0.1]  |  1,000 Documents  |  Turnover: 31,964,056,700 ₴|
+|  [🧊] FROZEN ARCHIVE EXPLORER -- HISTORICAL ACCOUNTING VAULT                         |
+|  [Air-Gapped: Localhost 127.0.0.1]  |  1,000 Documents  |  Turnover: 45,322,193.00 ₴|
 +------------------------------------------------------------------------------------+
 |  [ Search by EDRPOU, Company Name, or Doc Number...                     ] [Search] |
 |                                                                                    |
 |  Filters: [ All Types v ]  [ Year: 2024 v ]                                       |
 |                                                                                    |
 |  Doc #     | Date       | Type                | Counterparty         | Total (UAH) |
-|  РН-00042  | 2024-03-14 | Видаткова накладна  | ТОВ "Агро-Трейд"     | 184,500.00 ₴|
-|  АК-00119  | 2024-05-20 | Акт виконаних робіт | ФОП Шевченко О. П.   |  42,000.00 ₴|
-|  СФ-00215  | 2024-08-11 | Рахунок на оплату   | ТОВ "Логістик-Схід"  | 512,300.00 ₴|
+|  РН-00042  | 14.03.2024 | Видаткова накладна  | ТОВ "Агро-Трейд"     |  78,782.00 ₴|
+|  АК-00119  | 20.05.2024 | Акт виконаних робіт | ФОП Шевченко О. П.   |  24,954.00 ₴|
+|  СФ-00215  | 11.08.2024 | Рахунок на оплату   | ТОВ "Логістик-Схід"  | 112,300.00 ₴|
 +------------------------------------------------------------------------------------+
 |  [ Export Results to Excel (.xlsx) ]   [ Print Primary Document ]                  |
 +------------------------------------------------------------------------------------+
