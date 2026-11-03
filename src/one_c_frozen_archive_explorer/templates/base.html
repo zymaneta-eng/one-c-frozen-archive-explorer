@@ -35,8 +35,8 @@
           <span class="badge badge-zerotoken" title="Нульова вартість хмарних API або ліцензій">
             Zero-License / 0-Token
           </span>
-          <button type="button" onclick="openWormModal()" class="badge" style="cursor: pointer; background: rgba(99, 102, 241, 0.2); border: 1px solid rgba(99, 102, 241, 0.5); color: #c7d2fe; display: flex; align-items: center; gap: 0.4rem; font-family: inherit; font-size: 0.75rem; font-weight: 600; padding: 0.35rem 0.75rem; border-radius: 9999px;" title="Переглянути криптографічний сертифікат цілісності WORM (п. 44.3 ст. 44 ПКУ)">
-            <span>📜</span> Сертифікат WORM
+          <button type="button" onclick="openWormModal()" class="badge" style="cursor: pointer; background: rgba(99, 102, 241, 0.2); border: 1px solid rgba(99, 102, 241, 0.5); color: #c7d2fe; display: flex; align-items: center; gap: 0.4rem; font-family: inherit; font-size: 0.75rem; font-weight: 600; padding: 0.35rem 0.75rem; border-radius: 9999px;" title="Переглянути криптографічний протокол контролю цілісності (SHA-256)">
+            <span>🛡️</span> Контроль цілісності (SHA-256)
           </button>
         </div>
       </div>
@@ -56,10 +56,10 @@
       <div class="footer-inner">
         <div>
           <strong>Frozen Archive Explorer v1.0.0</strong> &mdash; 
-          Постійне юридичне збереження первинних документів (DuckDB + SQLite FTS5 BM25 + Snappy Parquet).
+          Локальний аналітичний депозитарій історичної первинної бухгалтерії (DuckDB + SQLite FTS5 + Parquet).
         </div>
         <div style="color: var(--text-muted);">
-          Відповідність вимогам п. 44.3 ст. 44 ПКУ (зберігання 1825 днів) &bull; 100% автономність
+          Оперативний доступ до документів за періоди зберігання (п. 44.3 ст. 44 ПКУ) &bull; Автономна робота без зовнішніх API
         </div>
       </div>
     </div>
@@ -234,17 +234,17 @@
     });
   </script>
 
-  <!-- WORM Audit Manifest Modal -->
+  <!-- Audit Manifest Modal (SHA-256 Integrity Protocol) -->
   <div id="wormModal" class="modal-overlay no-print" onclick="if(event.target === this) closeWormModal();">
     <div class="modal-content" style="max-width: 720px; border: 1px solid #4338ca;">
       <button class="modal-close-btn" onclick="closeWormModal()">&times;</button>
       <div style="padding: 2rem;">
         <div style="display: flex; align-items: center; gap: 0.85rem; margin-bottom: 1.25rem;">
-          <div style="font-size: 2.2rem;">📜</div>
+          <div style="font-size: 2.2rem;">🛡️</div>
           <div>
-            <h2 style="font-size: 1.35rem; font-weight: 800; color: #fff; margin: 0;">Сертифікат незмінності WORM</h2>
+            <h2 style="font-size: 1.35rem; font-weight: 800; color: #fff; margin: 0;">Протокол контролю цілісності даних</h2>
             <div style="color: #94a3b8; font-size: 0.85rem; margin-top: 2px;">
-              Write Once, Read Many &bull; Відповідність п. 44.3 ст. 44 Податкового кодексу України
+              Криптографічна фіксація SHA-256 &bull; Захист архівних записів від випадкових змін та пошкоджень
             </div>
           </div>
         </div>
@@ -287,7 +287,7 @@
         </div>
 
         <div style="font-size: 0.775rem; color: #94a3b8; line-height: 1.45; border-top: 1px solid #334155; padding-top: 0.85rem;">
-          <strong>Юридична сила WORM:</strong> Даний сертифікат фіксує бітову незмінність архівного файлу DuckDB. Відповідно до статті 44.3 Податкового кодексу України платники податків зобов'язані забезпечити зберігання первинних бухгалтерських документів не менш як 1825 днів з дня подання звітності. Будь-яка зміна або видалення записів призведе до миттєвої зміни SHA-256 хэшу.
+          <strong>Технічний контроль цілісності:</strong> Протокол фіксує бітову незмінність файлу сховища DuckDB та згенерованих Parquet-снапшотів за алгоритмом SHA-256. Використовується для інвентаризації, контролю контрольних сум під час аудитів та виявлення пошкоджень носіїв інформації.
         </div>
       </div>
     </div>
