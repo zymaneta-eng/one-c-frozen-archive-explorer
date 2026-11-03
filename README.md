@@ -40,7 +40,7 @@ However, **Article 44.3 of the Tax Code of Ukraine (ПКУ)** legally mandates t
   - Converts bloated SQL dumps into compressed Snappy Parquet and DuckDB files.
   - A full enterprise archive of 1,000 documents and 1,409 item specifications compresses down to **just 111 KB in Parquet**.
 - **Multi-Organization Enterprise Support (Multi-Entity):**
-  - Built-in multi-company selector (`ТОВ "Ареонікс Діджитал"`, `ФОП Мельник В.О.`, or consolidated holding view).
+  - Built-in multi-company selector (`ТОВ "Ареонікс Діджитал"`, `ФОП "Ареонікс-Сервіс"`, or consolidated holding view).
   - Dynamic real-time recalculation of turnover, document counts, and counterparty balances per legal entity.
 - **Bilateral Reconciliation Act (Акт звірки взаєморозрахунків):**
   - 1-click generation of official mutual reconciliation statements between our organization and any counterparty.
@@ -98,7 +98,7 @@ Tested on a benchmark enterprise vault (100 counterparties, 1,000 primary invoic
 |                                                                                                    |
 |  №       | Організація       | Тип        | Номер    | Дата       | Контрагент          | Сума (грн)   |
 |  1       | Ареонікс Діджитал | Видаткова  | РН-00042 | 14.03.2024 | ТОВ "Агро-Трейд"    |  78,782.00 ₴ |
-|  2       | ФОП Мельник В.О.  | Акт робіт  | АК-00119 | 20.05.2024 | ФОП Шевченко О. П.  |  24,954.00 ₴ |
+|  2       | Ареонікс-Сервіс   | Акт робіт  | АК-00119 | 20.05.2024 | ФОП Шевченко О. П.  |  24,954.00 ₴ |
 +----------------------------------------------------------------------------------------------------+
 |  [📥 Експорт в Excel (.xlsx)]   [📋 Акт звірки взаєморозрахунків]   [🖨️ Друк первинного документа]  |
 +----------------------------------------------------------------------------------------------------+

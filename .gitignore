@@ -1,5 +1,52 @@
+# Python & Environments
 __pycache__/
-*.pyc
-.DS_Store
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+
+# Хранилища и базы данных
 *.duckdb
+*.duckdb.wal
+*.parquet
 *.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.1CD
+*.mdf
+*.ldf
+*.bak
+*.sql
+archive_vault.duckdb
+archive_index.db
+parquet_vault/
+
+# Папки и дампы реальных выгрузок
+data/
+raw_data/
+real_data/
+*.csv
+*.xlsx
+*.xls
+*.jsonl
+*.env
+.env.*
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
