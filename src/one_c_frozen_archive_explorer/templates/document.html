@@ -88,7 +88,18 @@
 
       <div class="info-row">
         <span class="info-label">Наша організація:</span>
-        <span class="info-val" style="color: #93c5fd; font-weight: 600;">{{ doc.our_company_name }} (ЄДРПОУ {{ doc.our_company_edrpou }})</span>
+        <span class="info-val" style="color: #e2e8f0; font-weight: 600;">{{ doc.our_company_name }} (ЄДРПОУ {{ doc.our_company_edrpou }})</span>
+      </div>
+
+      <div class="info-row">
+        <span class="info-label">Податковий статус продавця:</span>
+        <span class="info-val">
+          {% if doc.our_company_id == 'org_01' %}
+            <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 0.75rem;">Платник ПДВ на загальних підставах (20%)</span>
+          {% else %}
+            <span class="badge" style="background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.3); font-size: 0.75rem;">Без ПДВ (Спрощена система 3 група)</span>
+          {% endif %}
+        </span>
       </div>
 
       <div class="info-row">
@@ -175,20 +186,28 @@
       </div>
     </div>
 
-    <div style="min-width: 260px; text-align: right;">
+    <div style="min-width: 280px; text-align: right;">
       <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">
         <span>Сума без ПДВ:</span>
-        <span style="font-family: var(--font-mono); color: #fff;">{{ doc.formatted_without_vat }}</span>
+        <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: #fff;">
+          {% if doc.vat_kopiykas > 0 %}{{ doc.formatted_without_vat }}{% else %}{{ doc.formatted_total }}{% endif %}
+        </span>
       </div>
 
-      <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">
-        <span>Сума ПДВ 20%:</span>
-        <span style="font-family: var(--font-mono); color: #fff;">{{ doc.formatted_vat }}</span>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">
+        <span>Сума ПДВ:</span>
+        <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: #fff;">
+          {% if doc.vat_kopiykas > 0 %}
+            {{ doc.formatted_vat }} <span style="color: #94a3b8; font-size: 0.8rem;">(20%)</span>
+          {% else %}
+            <span class="badge" style="background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.3); font-size: 0.75rem; padding: 0.15rem 0.5rem;">Без ПДВ</span>
+          {% endif %}
+        </span>
       </div>
 
       <div style="border-top: 1px solid var(--border-light); padding-top: 0.75rem; margin-top: 0.5rem; display: flex; justify-content: space-between; font-size: 1.35rem; font-weight: 700; color: #34d399;">
         <span>Всього з ПДВ:</span>
-        <span style="font-family: var(--font-mono);">{{ doc.formatted_total }}</span>
+        <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums;">{{ doc.formatted_total }}</span>
       </div>
     </div>
   </div>

@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from decimal import Decimal, ROUND_HALF_UP
 from typing import List, Optional, Any, Dict
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 # ---------------------------------------------------------------------------
@@ -119,8 +119,8 @@ def format_kopiykas(amount_kopiykas: int | None, currency: str = "₴") -> str:
     hryvnias = abs_kop // 100
     kop = abs_kop % 100
 
-    # Format hryvnias with thin space/space for thousands
-    hryvnias_str = f"{hryvnias:,}".replace(",", "\u00a0")
+    # Format hryvnias with thin/regular space for thousands
+    hryvnias_str = f"{hryvnias:,}".replace(",", " ")
     sign = "-" if is_negative else ""
     curr = f" {currency}" if currency else ""
     return f"{sign}{hryvnias_str},{kop:02d}{curr}"
@@ -374,10 +374,12 @@ class DocumentHeaderModel(BaseModel):
     year: int
     source_file: Optional[str] = None
 
+    @computed_field
     @property
     def formatted_total(self) -> str:
         return format_kopiykas(self.total_amount_kopiykas)
 
+    @computed_field
     @property
     def formatted_vat(self) -> str:
         return format_kopiykas(self.vat_kopiykas)
@@ -387,14 +389,17 @@ class DocumentDetailModel(DocumentHeaderModel):
     counterparty: Optional[CounterpartyModel] = None
     items: List[DocumentItemModel] = Field(default_factory=list)
 
+    @computed_field
     @property
     def total_in_words(self) -> str:
         return amount_in_words_ua(self.total_amount_kopiykas)
 
+    @computed_field
     @property
     def amount_without_vat_kopiykas(self) -> int:
         return self.total_amount_kopiykas - self.vat_kopiykas
 
+    @computed_field
     @property
     def formatted_without_vat(self) -> str:
         return format_kopiykas(self.amount_without_vat_kopiykas)

@@ -133,7 +133,7 @@ class SearchEngine:
                     with self.get_sqlite() as conn:
                         cur = conn.cursor()
                         cur.execute(
-                            "SELECT doc_id, rank, snippet(doc_fts, -1, '<b>', '</b>', '...', 10) as snip FROM doc_fts WHERE doc_fts MATCH ? ORDER BY rank LIMIT 200",
+                            "SELECT doc_id, rank, snippet(doc_fts, -1, '<mark class=\"highlight\">', '</mark>', '...', 10) as snip FROM doc_fts WHERE doc_fts MATCH ? ORDER BY rank LIMIT 200",
                             (f'"{query}"',),
                         )
                         fts_matches = [(r["doc_id"], float(r["rank"]), r["snip"]) for r in cur.fetchall()]

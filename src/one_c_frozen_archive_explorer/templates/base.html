@@ -105,17 +105,24 @@
             `;
           });
 
+          const isVat = (doc.vat_kopiykas || 0) > 0;
+          const withoutVatAmt = isVat ? (doc.total_amount_kopiykas - doc.vat_kopiykas) : doc.total_amount_kopiykas;
           const totalFormatted = (doc.total_amount_kopiykas / 100).toLocaleString('uk-UA', {minimumFractionDigits: 2}) + ' ₴';
+          const withoutVatFormatted = (withoutVatAmt / 100).toLocaleString('uk-UA', {minimumFractionDigits: 2}) + ' ₴';
           const vatFormatted = (doc.vat_kopiykas / 100).toLocaleString('uk-UA', {minimumFractionDigits: 2}) + ' ₴';
+
+          const vatDisplay = isVat 
+            ? `ПДВ 20%: <strong style="font-family:monospace; color:#fff;">${vatFormatted}</strong>` 
+            : `<span class="badge" style="background: rgba(100, 116, 139, 0.25); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.35); font-size: 0.75rem; padding: 0.15rem 0.5rem;">Без ПДВ</span>`;
 
           body.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; border-bottom: 1px solid #374151; padding-bottom: 1rem;">
               <div>
-                <span class="badge ${doc.doc_type.includes('Видаткова') ? 'badge-doc-rn' : doc.doc_type.includes('Акт') ? 'badge-doc-akt' : 'badge-doc-sf'}">${doc.doc_type}</span>
+                <span class="badge ${doc.doc_type.includes('Видаткова') ? 'badge-doc-rn' : doc.doc_type.includes('Акт') ? 'badge-doc-akt' : doc.doc_type.includes('Платіж') ? 'badge-doc-pay' : 'badge-doc-sf'}">${doc.doc_type}</span>
                 <h2 style="font-size: 1.4rem; font-weight: 700; margin-top: 0.5rem; color: #fff;">${doc.doc_number}</h2>
                 <div style="color: #9ca3af; font-size: 0.85rem;">Дата складання: <strong>${doc.doc_date}</strong> (${doc.year} рік)</div>
               </div>
-              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-right: 2.25rem;">
                 <a href="/reconciliation/${encodeURIComponent(doc.counterparty_edrpou || doc.counterparty_id)}?our_company_id=${encodeURIComponent(doc.our_company_id || 'org_01')}" target="_blank" class="btn btn-primary btn-sm">📋 Акт звірки</a>
                 <a href="/document/${doc.id}/print" target="_blank" class="btn btn-secondary btn-sm">🖨️ Друк / PDF</a>
                 <a href="/export/document/${doc.id}/excel" class="btn btn-success btn-sm">📊 Excel (.xlsx)</a>
@@ -149,7 +156,7 @@
                     <th style="width: 70px; text-align: center;">Од.</th>
                     <th style="width: 80px; text-align: right;">К-сть</th>
                     <th style="width: 130px; text-align: right;">Ціна без ПДВ</th>
-                    <th style="width: 140px; text-align: right;">Сума</th>
+                    <th style="width: 140px; text-align: right;">Сума без ПДВ</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -158,14 +165,17 @@
               </table>
             </div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(31,41,55,0.6); padding: 1rem 1.25rem; border-radius: 0.5rem; border: 1px solid #374151;">
-              <div>
-                <div style="color:#9ca3af; font-size: 0.8rem;">Сума прописом:</div>
-                <div style="font-style: italic; color: #e5e7eb; font-size: 0.875rem;">${doc.total_in_words || ''}</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(31,41,55,0.6); padding: 1.25rem; border-radius: 0.5rem; border: 1px solid #374151; flex-wrap: wrap; gap: 1rem;">
+              <div style="flex: 1; min-width: 280px;">
+                <div style="color:#9ca3af; font-size: 0.775rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.03em;">Сума прописом:</div>
+                <div style="font-style: italic; color: #f8fafc; font-size: 0.95rem; font-weight: 500; margin-top: 0.25rem;">
+                  ${doc.total_in_words ? doc.total_in_words : '—'}
+                </div>
               </div>
-              <div style="text-align: right;">
-                <div style="color: #9ca3af; font-size: 0.8rem;">У т.ч. ПДВ 20%: <span style="font-family:monospace; color:#fff;">${vatFormatted}</span></div>
-                <div style="font-size: 1.35rem; font-weight: 700; color: #34d399; font-family: monospace;">Разом: ${totalFormatted}</div>
+              <div style="text-align: right; min-width: 220px;">
+                <div style="color: #9ca3af; font-size: 0.85rem; margin-bottom: 0.25rem;">Сума без ПДВ: <span style="font-family:monospace; color:#fff;">${withoutVatFormatted}</span></div>
+                <div style="color: #9ca3af; font-size: 0.85rem; margin-bottom: 0.35rem;">${vatDisplay}</div>
+                <div style="font-size: 1.35rem; font-weight: 700; color: #34d399; font-family: monospace; letter-spacing: -0.02em;">Разом з ПДВ: ${totalFormatted}</div>
               </div>
             </div>
           `;

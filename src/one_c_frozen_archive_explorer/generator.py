@@ -206,7 +206,10 @@ def generate_documents_and_items(
     doc_counters = {"РН-": 1, "АКТ-": 1, "СФ-": 1, "ПІ-": 1}
 
     for i in range(1, doc_count + 1):
-        cp = random.choice(counterparties)
+        if i <= len(counterparties):
+            cp = counterparties[i - 1]
+        else:
+            cp = random.choice(counterparties)
         rnd_days = random.randint(0, day_span)
         doc_date = start_date + timedelta(days=rnd_days)
 
@@ -229,6 +232,18 @@ def generate_documents_and_items(
         contract_num = f"{random.randint(1, 450)}/{doc_date.strftime('%y')}-{random.choice(['В', 'Т', 'П', 'У'])}"
         contract_str = f"Договір {random.choice(CONTRACT_TYPES)} № {contract_num} від {doc_date.strftime('%d.%m.%Y')}"
 
+        # Multi-organization assignment: 70% TOV Areonix Digital (VAT payer 20%), 30% FOP Areonix-Service (Single tax non-VAT)
+        if random.random() < 0.70:
+            our_org_id = "org_01"
+            our_org_name = 'ТОВ "Ареонікс Діджитал"'
+            our_org_edrpou = "43981245"
+            is_vat_payer = True
+        else:
+            our_org_id = "org_02"
+            our_org_name = 'ФОП "Ареонікс-Сервіс"'
+            our_org_edrpou = "3124598712"
+            is_vat_payer = False
+
         doc_total_kopiykas = 0
         doc_vat_kopiykas = 0
 
@@ -236,7 +251,12 @@ def generate_documents_and_items(
             # Bank Payment Instruction (Поступление на расчетный счет / Оплата покупця)
             # Forms CREDIT in Reconciliation Act, paying off debt from shipments
             pay_amt_kop = (random.randint(1500000, 22000000) // 100) * 100  # 15k - 220k UAH
-            vat_kop = int(round(pay_amt_kop / 6)) if not cp["is_fop"] else 0
+            if is_vat_payer:
+                base_kop = int(round(pay_amt_kop * 5 / 6))
+                vat_kop = pay_amt_kop - base_kop
+            else:
+                vat_kop = 0
+
             doc_total_kopiykas = pay_amt_kop
             doc_vat_kopiykas = vat_kop
 
@@ -289,9 +309,10 @@ def generate_documents_and_items(
                 unit_price_kop = (random.randint(p_min, p_max) // 100) * 100  # Rounded to exact whole hryvnia or 50 kop
                 amount_kop = int(round(unit_price_kop * qty))
 
-                # VAT: 20% if not FOP
-                if not cp["is_fop"]:
-                    vat_kop = int(round(amount_kop / 6))  # 20% included in total: VAT = Total / 6
+                # VAT: 20% if our company is VAT payer (TOV), 0 if FOP
+                if is_vat_payer:
+                    base_kop = int(round(amount_kop * 5 / 6))
+                    vat_kop = amount_kop - base_kop
                 else:
                     vat_kop = 0
 
@@ -323,16 +344,6 @@ def generate_documents_and_items(
                 None,
             ]
             comment_text = random.choice(comments_pool)
-
-        # Multi-organization assignment: 70% TOV Areonix Digital, 30% FOP Areonix-Service
-        if random.random() < 0.70:
-            our_org_id = "org_01"
-            our_org_name = 'ТОВ "Ареонікс Діджитал"'
-            our_org_edrpou = "43981245"
-        else:
-            our_org_id = "org_02"
-            our_org_name = 'ФОП "Ареонікс-Сервіс"'
-            our_org_edrpou = "3124598712"
 
         documents.append({
             "id": doc_id,

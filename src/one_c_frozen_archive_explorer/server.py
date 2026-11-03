@@ -78,8 +78,24 @@ def create_app() -> FastAPI:
             return f"{parts[2]}.{parts[1]}.{parts[0]}"
         return str(date_str)
 
+    def format_money_html(amount_kopiykas: int | None, currency: str = "₴") -> str:
+        """
+        Formats kopiykas into financial HTML with non-breaking tabular numbers and muted currency symbol.
+        e.g. 4244600 -> '42 446,00&nbsp;<span class="amount-curr">₴</span>'
+        """
+        if amount_kopiykas is None:
+            amount_kopiykas = 0
+        is_negative = amount_kopiykas < 0
+        abs_kop = abs(amount_kopiykas)
+        hryvnias = abs_kop // 100
+        kop = abs_kop % 100
+        hryvnias_str = f"{hryvnias:,}".replace(",", " ")
+        sign = "-" if is_negative else ""
+        return f'{sign}{hryvnias_str},{kop:02d}&nbsp;<span class="amount-curr" style="color: #94a3b8; font-weight: 400; font-size: 0.9em;">{currency}</span>'
+
     templates.env.filters["format_kopiykas"] = format_kopiykas
     templates.env.filters["format_date_ua"] = format_date_ua
+    templates.env.filters["format_money_html"] = format_money_html
 
     db_path, index_path = get_default_paths()
     engine = SearchEngine(db_path=db_path, index_path=index_path)
@@ -200,11 +216,17 @@ def create_app() -> FastAPI:
 
     @app.get("/api/document/{doc_id}")
     async def api_document(doc_id: str):
-        """Returns JSON details of a document."""
+        """Returns JSON details of a document including computed financial fields."""
         doc = engine.get_document_details(doc_id)
         if not doc:
             raise HTTPException(status_code=404, detail="Документ не знайдено")
-        return doc.model_dump()
+        res = doc.model_dump()
+        res["total_in_words"] = doc.total_in_words
+        res["formatted_total"] = doc.formatted_total
+        res["formatted_vat"] = doc.formatted_vat
+        res["formatted_without_vat"] = doc.formatted_without_vat
+        res["amount_without_vat_kopiykas"] = doc.amount_without_vat_kopiykas
+        return res
 
     @app.get("/api/stats")
     async def api_stats(our_company_id: Optional[str] = Query(default=None)):

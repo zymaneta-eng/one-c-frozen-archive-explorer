@@ -187,11 +187,15 @@
       <table style="width: 320px; border-collapse: collapse; font-size: 9.5pt;">
         <tr>
           <td style="padding: 2px 5px; text-align: right;">Разом без ПДВ:</td>
-          <td style="padding: 2px 5px; text-align: right; font-weight: bold; width: 120px;">{{ doc.formatted_without_vat }}</td>
+          <td style="padding: 2px 5px; text-align: right; font-weight: bold; width: 120px;">
+            {% if doc.vat_kopiykas > 0 %}{{ doc.formatted_without_vat }}{% else %}{{ doc.formatted_total }}{% endif %}
+          </td>
         </tr>
         <tr>
-          <td style="padding: 2px 5px; text-align: right;">ПДВ 20%:</td>
-          <td style="padding: 2px 5px; text-align: right; font-weight: bold;">{{ doc.formatted_vat }}</td>
+          <td style="padding: 2px 5px; text-align: right;">ПДВ:</td>
+          <td style="padding: 2px 5px; text-align: right; font-weight: bold;">
+            {% if doc.vat_kopiykas > 0 %}{{ doc.formatted_vat }} (20%){% else %}Без ПДВ{% endif %}
+          </td>
         </tr>
         <tr style="border-top: 1.5px solid #000;">
           <td style="padding: 4px 5px; text-align: right; font-weight: bold; font-size: 11pt;">Всього з ПДВ:</td>
