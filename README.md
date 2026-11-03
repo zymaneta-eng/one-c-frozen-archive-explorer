@@ -59,9 +59,11 @@ However, **Article 44.3 of the Tax Code of Ukraine (ПКУ)** legally mandates t
   - Binds strictly to `127.0.0.1:8020` without WAN exposure.
   - All CSS styles, layouts, and scripts are self-contained locally (zero CDN requests, 100% functional without internet).
   - $0 LLM token cost (powered by deterministic vectorized analytics and FTS5 BM25 ranking).
-- **Official Compliance Exports:**
-  - **Filtered Excel Export (.xlsx)** preserving all active search and organization filters with formatted accounting headers.
-  - **Print / PDF Form** formatted to Ukrainian primary accounting standards with authorized signature and seal blocks (Ctrl+P ready).
+- **Official Compliance Exports & Tax Audit Registry (ДПС):**
+  - **State Tax Service (ДПС) Compliance Registry:** Official summary registry form compliant with TCU Articles 44 & 85 with VAT breakdown, integer totals, verbal amount, and director/chief accountant signature blocks (Ctrl+P ready).
+  - **Bilateral Reconciliation Act Excel Export:** 1-click download of mutual statements in formatted `.xlsx` with dual-column accounting ledgers.
+  - **Filtered Search Excel Export (.xlsx):** Dynamically exports only the active search and organization slice with accounting number formats.
+  - **Primary Document Print Forms:** Formatted to Ukrainian primary accounting standards with authorized signature and seal blocks.
 
 ---
 
