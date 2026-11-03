@@ -1,14 +1,14 @@
 # Frozen Archive Explorer — Заморожений архів первинної бухгалтерії 1С / BAS
 
-[![Ліцензія: MIT](https://img.shields.io/badge/Ліцензія-MIT-blue.svg)](LICENSE)
+[![Ліцензія: Commercial Proprietary](https://img.shields.io/badge/Ліцензія-Commercial%20Proprietary-blue.svg)]()
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg)]()
 [![Безпека: 100% Автономний](https://img.shields.io/badge/Безпека-100%25%20Air--Gapped%20%2F%20Offline-success.svg)]()
 [![Сховище: DuckDB + Parquet](https://img.shields.io/badge/Сховище-DuckDB%20%2B%20Snappy%20Parquet-orange.svg)]()
 [![Пошук: SQLite FTS5 BM25](https://img.shields.io/badge/Пошук-SQLite%20FTS5%20BM25%20(%3C%2050%20мс)-blueviolet.svg)]()
 [![Хмарні токени: 0 грн](https://img.shields.io/badge/Хмарні%20токени-0%20грн%20(Zero--Cost)-blue.svg)]()
-[![Стандарт: п. 44.3 ст. 44 ПКУ](https://img.shields.io/badge/Комплаєнс-п.%2044.3%20ст.%2044%20ПКУ-emerald.svg)]()
+[![Комплаєнс: п. 44.3 ст. 44 ПКУ](https://img.shields.io/badge/Комплаєнс-п.%2044.3%20ст.%2044%20ПКУ-emerald.svg)]()
 
-> **Повністю автономне (Air-Gapped), безліцензійне інженерне рішення для консервації, екстремального стиснення, миттєвого повнотекстового пошуку (< 50 мс) та друку історичних первинних бухгалтерських документів 1С / BAS без жодних витрат на хмарні API-токени чи платні ліцензії.**
+> **Повністю автономне (Air-Gapped) інженерне рішення для консервації, екстремального стиснення, миттєвого повнотекстового пошуку (< 50 мс) та друку історичних первинних бухгалтерських документів 1С / BAS без жодних витрат на хмарні API-токени чи сторонні підписки.**
 
 ---
 
@@ -91,7 +91,19 @@
 
 ---
 
-## 🗄️ 3. Модель даних та фінансова точність
+## 📸 3. Інтерфейс депозитарію (Screenshots)
+
+| Головний реєстр та миттєвий FTS5 пошук | Двосторонній Акт звірки взаєморозрахунків |
+| :---: | :---: |
+| ![Dashboard](assets/preview-dashboard.png) | ![Reconciliation](assets/preview-reconciliation.png) |
+
+| Картка первинного документа з номенклатурою | Сертифікат незмінності WORM (SHA-256) |
+| :---: | :---: |
+| ![Document Card](assets/preview-document.png) | ![WORM Certificate](assets/preview-worm.png) |
+
+---
+
+## 🗄️ 4. Модель даних та фінансова точність
 
 ### Принцип збереження сум у цілих копійках (`BIGINT`)
 У фінансовому обліку використання типів `FLOAT` чи `DOUBLE` неприпустиме через похибки двійкового округлення.
@@ -114,7 +126,7 @@
 
 ---
 
-## 📋 4. Покроковий регламент консервації та виведення 1С
+## 📋 5. Покроковий регламент консервації та виведення 1С
 
 Дотримуйтесь цих 5 кроків для остаточного й безпечного виведення 1С / BAS з експлуатації:
 
@@ -125,11 +137,11 @@
 * Табличні частини номенклатури документів (`document_items.csv`)
 
 ### Крок 2. Консервація у DuckDB та Snappy Parquet
-Запустіть імпортер консервації:
+Запустіть конвеєр консервації:
 ```bash
-one-c-importer --json ./data/frozen_archive_bundle.json
+python -m one_c_frozen_archive_explorer.freeze_importer
 ```
-Імпортер автоматично:
+Імпортер автоматично підтримує як окремі CSV-таблиці (`data/*.csv`), так і єдиний зведений пакет JSON:
 1. Нормалізує копійки та запише первинні записи в `archive_vault.duckdb`.
 2. Створить компактні Snappy Parquet бекапи в папці `parquet_vault/`.
 3. Побудує пошуковий FTS5 індекс `archive_index.db` з токенізацією українських слів.
@@ -148,13 +160,13 @@ python -c "from one_c_frozen_archive_explorer.search_engine import SearchEngine;
 ### Крок 5. Експлуатація архіву та проходження перевірок ДПС
 При надходженні запиту від податкової інспекції, аудиторів чи контрагентів запустіть локальний інтерфейс:
 ```bash
-one-c-archive
+python -m one_c_frozen_archive_explorer.server
 ```
 Відкрийте `http://127.0.0.1:8020` у будь-якому браузері на комп'ютері без підключення до мережі.
 
 ---
 
-## 🚀 5. Встановлення та швидкий старт
+## 🚀 6. Встановлення та швидкий старт
 
 ### Системні вимоги:
 * **Python:** версія 3.10 або новіша
@@ -163,41 +175,41 @@ one-c-archive
 
 ### 1. Клонування та встановлення залежностей
 ```bash
-git clone https://github.com/zymaneta-eng/one-c-frozen-archive-explorer-core.git
-cd one-c-frozen-archive-explorer-core
+git clone https://github.com/zymaneta-eng/one-c-frozen-archive-explorer.git
+cd one-c-frozen-archive-explorer
 pip install -e .
 ```
 
 ### 2. Генерація тестового українського архіву (100 компаній, 1 000 документів)
 Якщо у вас немає готового вивантаження, створіть синтетичну верифіковану базу:
 ```bash
-one-c-generator
+python -m one_c_frozen_archive_explorer.generator
 ```
 Команда створить:
 * 100 українських контрагентів (ТОВ, ПП, ПрАТ з 8-значними ЄДРПОУ; ФОП з 10-значними ІПН) у Києві, Львові, Дніпрі, Одесі, Харкові, Вінниці.
-* 1 000 первинних документів за 2021–2025 роки з реалістичними номенклатурними рядками.
-* Готові файли сховища: `archive_vault.duckdb`, `archive_index.db`, та `parquet_vault/*.parquet`.
+* 1 000 первинних документів за 2021–2025 роки з реальними номенклатурними рядками.
+* Файли сховища DuckDB, індекс SQLite FTS5 та Parquet-снапшоти.
 
 ### 3. Запуск веб-інтерфейсу
 ```bash
-one-c-archive
+python -m one_c_frozen_archive_explorer.server
 ```
 Інтерфейс відкриється за адресою: **`http://127.0.0.1:8020`**
 
 ---
 
-## ⚡ 6. Бенчмарки продуктивності та ступінь стиснення
+## ⚡ 7. Бенчмарки продуктивності та ступінь стиснення
 
 Заміри продуктивності на стандартній робочій станції (Windows / Python 3.12 / 1 000 документів):
 
 | Тип операції | Обсяг вибірки | Час відповіді | Статус (< 50 мс) |
 | :--- | :--- | :--- | :--- |
-| **Пошук за кодом ЄДРПОУ (8 цифр)** | 1 000 документів | **1.8 – 25.4 мс** |  Виконано |
-| **Пошук за ІПН ФОП (10 цифр)** | 1 000 документів | **1.9 – 28.1 мс** |  Виконано |
-| **Пошук за номером документа (`РН-00077`)** | 1 000 документів | **1.6 – 24.0 мс** |  Виконано |
-| **Пошук за назвою послуги чи товару** | 1 000 документів | **2.1 – 29.5 мс** |  Виконано |
-| **Миттєвий автокомпліт контрагентів** | 100 компаній | **4.2 – 8.5 мс** |  Виконано |
-| **Розрахунок глобальних агрегатів і оборотів** | 1 000 документів | **3.8 – 6.2 мс** |  Виконано |
+| **Пошук за кодом ЄДРПОУ** (8 цифр) | 1 000 документів | 1.8 – 25.4 мс | ✅ Виконано |
+| **Пошук за ІПН ФОП** (10 цифр) | 1 000 документів | 1.9 – 28.1 мс | ✅ Виконано |
+| **Пошук за номером документа** (`РН-00077`) | 1 000 документів | 1.6 – 24.0 мс | ✅ Виконано |
+| **Пошук за назвою номенклатури** | 1 000 документів | 2.1 – 29.5 мс | ✅ Виконано |
+| **Миттєвий автокомпліт контрагентів** | 100 компаній | 4.2 – 8.5 мс | ✅ Виконано |
+| **Розрахунок агрегатів і оборотів** | 1 000 документів | 3.8 – 6.2 мс | ✅ Виконано |
 
 ### Показники стиснення сховища:
 * **База даних DuckDB:** 4.01 МБ
@@ -207,7 +219,7 @@ one-c-archive
 
 ---
 
-## 🧪 7. Автоматичне тестування (Pytest Suite)
+## 🧪 8. Автоматичне тестування (Pytest Suite)
 
 Репозиторій має 100% покриття критичної функціональності автоматичними тестами:
 * `tests/test_importer.py` — точність підрахунку копійок, захист від float drift, створення DuckDB таблиць, Parquet-снапшотів та еластичний маппінг колонок.
@@ -221,24 +233,50 @@ pytest -v
 
 Результат виконання:
 ```
+tests/test_importer.py::test_financial_kopiykas_accuracy PASSED         [  3%]
+tests/test_importer.py::test_importer_records_and_parquet PASSED        [  7%]
+tests/test_importer.py::test_smart_column_resolver_and_elastic_mapping PASSED [ 11%]
+tests/test_importer.py::test_payment_instruction_credit_handling PASSED [ 15%]
+tests/test_search.py::test_search_by_edrpou PASSED                     [ 19%]
+tests/test_search.py::test_search_by_fop_ipn PASSED                    [ 23%]
+tests/test_search.py::test_search_by_doc_number_with_hyphen PASSED     [ 26%]
+tests/test_search.py::test_search_by_item_name_and_comment PASSED      [ 30%]
+tests/test_search.py::test_search_filter_by_year_and_type PASSED       [ 34%]
+tests/test_search.py::test_document_details PASSED                     [ 38%]
+tests/test_search.py::test_autocomplete_suggest PASSED                 [ 42%]
+tests/test_search.py::test_sub_50ms_performance_benchmark PASSED       [ 46%]
+tests/test_search.py::test_multi_company_filtering PASSED              [ 50%]
+tests/test_server.py::test_index_page PASSED                           [ 53%]
+tests/test_server.py::test_index_page_search_filter PASSED             [ 57%]
+tests/test_server.py::test_api_search_endpoint PASSED                  [ 61%]
+tests/test_server.py::test_api_suggest_endpoint PASSED                 [ 65%]
+tests/test_server.py::test_api_stats_endpoint PASSED                   [ 69%]
+tests/test_server.py::test_document_detail_and_print_pages PASSED      [ 73%]
+tests/test_server.py::test_export_single_document_excel PASSED         [ 76%]
+tests/test_server.py::test_export_search_results_excel PASSED          [ 80%]
+tests/test_server.py::test_document_not_found PASSED                   [ 84%]
+tests/test_server.py::test_reconciliation_act_page PASSED              [ 88%]
+tests/test_server.py::test_reconciliation_act_credit_debit_balance PASSED [ 92%]
+tests/test_server.py::test_dps_registry_page PASSED                    [ 96%]
+tests/test_server.py::test_worm_manifest_endpoint PASSED               [100%]
+
 ============================= 26 passed in 5.84s ==============================
 ```
 
 ---
 
-## 📁 8. Структура репозиторію
+## 📁 9. Структура репозиторію
 
 ```
 one-c-frozen-archive-explorer/
 ├── pyproject.toml                     # Метадані пакета, залежності та точки входу CLI
-├── README.md                          # Офіційна українська бізнес- та техдокументація
+├── README.md                          # Офіційна українська бізнес- та техдокументація вітрини
 ├── archive_manifest.json              # WORM-маніфест цілісності та контрольні суми SHA-256
-├── archive_vault.duckdb               # Колоночна база DuckDB (Frozen Vault)
-├── archive_index.db                   # Повнотекстовий індекс SQLite FTS5 BM25
-├── parquet_vault/                     # Стиснені колоночні файли Snappy Parquet (123 КБ)
-│   ├── vault_counterparties.parquet
-│   ├── vault_documents.parquet
-│   └── vault_document_items.parquet
+├── assets/                            # Скріншоти та візуальні матеріали вітрини
+│   ├── preview-dashboard.png
+│   ├── preview-reconciliation.png
+│   ├── preview-document.png
+│   └── preview-worm.png
 ├── data/                              # Нормалізовані первинні файли CSV/JSON
 │   ├── counterparties.csv
 │   ├── documents.csv
@@ -258,23 +296,27 @@ one-c-frozen-archive-explorer/
 │           ├── base.html              # Базовий каркас з air-gapped бейджами
 │           ├── index.html             # Головний реєстр із автокомплітом та звітами
 │           ├── document.html          # Картка документа зі специфікацією
-│           ├── reconciliation.html    # Зведений Акт звірки взаєморозрахунків
+│           ├── reconciliation_act.html # Зведений Акт звірки взаєморозрахунків
 │           ├── dps_registry.html      # Реєстр-опис первинних документів для ДПС
 │           └── print_view.html        # Чистий бланк А4 під друк / PDF (Ctrl+P)
 └── tests/
     ├── test_importer.py               # Тести ETL та фінансової точності в копійках
     ├── test_search.py                 # Тести швидкісного пошуку та бенчмарк < 50 мс
     └── test_server.py                 # Тести ендпоінтів FastAPI, звітів та генерації Excel
+
+# Локально згенеровані файли сховища (захищені правилами .gitignore):
+# ├── archive_vault.duckdb            # Локальна колоночна база DuckDB
+# ├── archive_index.db                # Локальний повнотекстовий індекс SQLite FTS5
+# └── parquet_vault/*.parquet         # Локальні стиснені Parquet-снапшоти
 ```
 
 ---
 
-## ⚖️ 9. Ліцензія та контакти
+## ⚖️ 10. Ліцензія та комерційні умови
 
-Розроблено для українських підприємств у рамках портфоліо **ARE-Portfolio**.  
-Поширюється за відкритою комерційною ліцензією MIT.
+**Пропрієтарне програмне забезпечення. Усі права захищено (All Rights Reserved).**  
+Вихідний код, індивідуальні адаптери вивантаження під нестандартні конфігурації 1С/BAS та автоматизований конвеєр міграції надаються виключно в рамках комерційного впровадження або корпоративної ліцензії.
 
-* **Автор:** Nataliia Zyma
-* **Email для зв'язку та впровадження:** [zymaneta@gmail.com](mailto:zymaneta@gmail.com)
-* **Репозиторій вихідного коду:** [github.com/zymaneta-eng/one-c-frozen-archive-explorer-core](https://github.com/zymaneta-eng/one-c-frozen-archive-explorer-core)
-* **Публічна вітрина проекту:** [github.com/zymaneta-eng/one-c-frozen-archive-explorer](https://github.com/zymaneta-eng/one-c-frozen-archive-explorer)
+* **Автор та розробник:** Nataliia Zyma
+* **Email для запитів та впровадження:** [zymaneta@gmail.com](mailto:zymaneta@gmail.com)
+* **Публічна вітрина проекту (Showcase):** [github.com/zymaneta-eng/one-c-frozen-archive-explorer](https://github.com/zymaneta-eng/one-c-frozen-archive-explorer)
