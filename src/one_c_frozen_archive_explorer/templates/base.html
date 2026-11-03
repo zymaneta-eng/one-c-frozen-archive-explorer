@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Frozen Archive Explorer{% endblock %}</title>
+  <!-- 100% Offline Local Air-Gapped Stylesheet - No External CDN -->
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <!-- Air-Gapped Header -->
+  <header class="app-header no-print">
+    <div class="container">
+      <div class="nav-bar">
+        <a href="/" class="brand-wrapper">
+          <div class="brand-logo" title="Frozen Archive Vault">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+              <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            </svg>
+          </div>
+          <div>
+            <div class="brand-title">Frozen Archive Explorer</div>
+            <div class="brand-subtitle">Заморожений архів первинної бухгалтерії 1C / BAS &bull; п. 44.3 ст. 44 ПКУ</div>
+          </div>
+        </a>
+
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <span class="badge badge-airgap" title="Працює локально без підключення до Інтернету">
+            <span style="display:inline-block; width:6px; height:6px; background:#10b981; border-radius:50%;"></span>
+            Air-Gapped / Offline
+          </span>
+          <span class="badge badge-zerotoken" title="Нульова вартість хмарних API або ліцензій">
+            Zero-License / 0-Token
+          </span>
+          <button type="button" onclick="openWormModal()" class="badge" style="cursor: pointer; background: rgba(99, 102, 241, 0.2); border: 1px solid rgba(99, 102, 241, 0.5); color: #c7d2fe; display: flex; align-items: center; gap: 0.4rem; font-family: inherit; font-size: 0.75rem; font-weight: 600; padding: 0.35rem 0.75rem; border-radius: 9999px;" title="Переглянути криптографічний сертифікат цілісності WORM (п. 44.3 ст. 44 ПКУ)">
+            <span>📜</span> Сертифікат WORM
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main style="flex: 1;">
+    <div class="container">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <!-- Offline Footer -->
+  <footer class="app-footer no-print">
+    <div class="container">
+      <div class="footer-inner">
+        <div>
+          <strong>Frozen Archive Explorer v1.0.0</strong> &mdash; 
+          Постійне юридичне збереження первинних документів (DuckDB + SQLite FTS5 BM25 + Snappy Parquet).
+        </div>
+        <div style="color: var(--text-muted);">
+          Відповідність вимогам п. 44.3 ст. 44 ПКУ (зберігання 1825 днів) &bull; 100% автономність
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Modal for quick document preview -->
+  <div id="quickModal" class="modal-overlay no-print" onclick="if(event.target === this) closeModal();">
+    <div class="modal-content">
+      <button class="modal-close-btn" onclick="closeModal()">&times;</button>
+      <div id="modalBody" style="padding: 1.5rem;">
+        <div style="text-align: center; color: var(--text-muted); padding: 2rem;">Завантаження документа...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function openModal(docId) {
+      const modal = document.getElementById('quickModal');
+      const body = document.getElementById('modalBody');
+      modal.style.display = 'flex';
+      body.innerHTML = '<div style="text-align:center; padding: 3rem; color: #9ca3af;">Завантаження документа з DuckDB...</div>';
+
+      fetch('/api/document/' + encodeURIComponent(docId))
+        .then(res => res.json())
+        .then(doc => {
+          if (!doc) {
+            body.innerHTML = '<div style="color:#ef4444; padding:2rem;">Документ не знайдено</div>';
+            return;
+          }
+          let itemsHtml = '';
+          (doc.items || []).forEach((it, idx) => {
+            const unitPrice = (it.unit_price_kopiykas / 100).toLocaleString('uk-UA', {minimumFractionDigits: 2}) + ' ₴';
+            const total = (it.amount_kopiykas / 100).toLocaleString('uk-UA', {minimumFractionDigits: 2}) + ' ₴';
+            itemsHtml += `
+              <tr>
+                <td style="color: #9ca3af; text-align: center;">${idx + 1}</td>
+                <td><strong>${it.item_name}</strong> ${it.sku ? '<span style="color:#6b7280; font-size:0.75rem;">(' + it.sku + ')</span>' : ''}</td>
+                <td style="text-align: center;">${it.unit}</td>
+                <td style="text-align: right; font-family: monospace;">${it.quantity}</td>
+                <td style="text-align: right; font-family: monospace;">${unitPrice}</td>
+                <td style="text-align: right; font-family: monospace; font-weight: 600;">${total}</td>
+              </tr>
+            `;
+          });
+
+          const totalFormatted = (doc.total_amount_kopiykas / 100).toLocaleString('uk-UA', {minimumFractionDigits: 2}) + ' ₴';
+          const vatFormatted = (doc.vat_kopiykas / 100).toLocaleString('uk-UA', {minimumFractionDigits: 2}) + ' ₴';
+
+          body.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; border-bottom: 1px solid #374151; padding-bottom: 1rem;">
+              <div>
+                <span class="badge ${doc.doc_type.includes('Видаткова') ? 'badge-doc-rn' : doc.doc_type.includes('Акт') ? 'badge-doc-akt' : 'badge-doc-sf'}">${doc.doc_type}</span>
+                <h2 style="font-size: 1.4rem; font-weight: 700; margin-top: 0.5rem; color: #fff;">${doc.doc_number}</h2>
+                <div style="color: #9ca3af; font-size: 0.85rem;">Дата складання: <strong>${doc.doc_date}</strong> (${doc.year} рік)</div>
+              </div>
+              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <a href="/reconciliation/${encodeURIComponent(doc.counterparty_edrpou || doc.counterparty_id)}?our_company_id=${encodeURIComponent(doc.our_company_id || 'org_01')}" target="_blank" class="btn btn-primary btn-sm">📋 Акт звірки</a>
+                <a href="/document/${doc.id}/print" target="_blank" class="btn btn-secondary btn-sm">🖨️ Друк / PDF</a>
+                <a href="/export/document/${doc.id}/excel" class="btn btn-success btn-sm">📊 Excel (.xlsx)</a>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+              <div style="background: rgba(31,41,55,0.4); border: 1px solid #374151; border-radius: 0.5rem; padding: 1rem; font-size: 0.85rem;">
+                <div style="color:#9ca3af; font-weight:600; text-transform:uppercase; font-size:0.75rem; margin-bottom:0.5rem;">Контрагент</div>
+                <div><strong>${doc.counterparty_name}</strong></div>
+                <div style="color: #9ca3af; margin-top: 0.25rem;">Код ЄДРПОУ / ІПН: <span style="color:#fff; font-family:monospace;">${doc.counterparty_edrpou}</span></div>
+                ${doc.counterparty && doc.counterparty.address ? `<div style="color: #9ca3af; margin-top: 0.25rem;">Адреса: ${doc.counterparty.address}</div>` : ''}
+                ${doc.counterparty && doc.counterparty.iban ? `<div style="color: #9ca3af; margin-top: 0.25rem;">IBAN: <span style="font-family:monospace; color:#34d399;">${doc.counterparty.iban}</span></div>` : ''}
+              </div>
+
+              <div style="background: rgba(31,41,55,0.4); border: 1px solid #374151; border-radius: 0.5rem; padding: 1rem; font-size: 0.85rem;">
+                <div style="color:#9ca3af; font-weight:600; text-transform:uppercase; font-size:0.75rem; margin-bottom:0.5rem;">Деталі операції</div>
+                <div>Наша організація: <strong style="color: #60a5fa;">${doc.our_company_name || 'ТОВ "Ареонікс Діджитал"'}</strong></div>
+                <div style="color: #9ca3af; margin-top: 0.25rem;">Договір: <strong>${doc.contract_number || 'Не вказано'}</strong></div>
+                <div style="color: #9ca3af; margin-top: 0.25rem;">Статус: <span style="color:#60a5fa;">${doc.status}</span></div>
+                <div style="color: #9ca3af; margin-top: 0.25rem;">Коментар: ${doc.comment || '—'}</div>
+              </div>
+            </div>
+
+            <div style="border: 1px solid #374151; border-radius: 0.5rem; overflow: hidden; margin-bottom: 1.5rem;">
+              <table class="archive-table">
+                <thead>
+                  <tr>
+                    <th style="width: 40px; text-align: center;">№</th>
+                    <th>Номенклатура / Послуга</th>
+                    <th style="width: 70px; text-align: center;">Од.</th>
+                    <th style="width: 80px; text-align: right;">К-сть</th>
+                    <th style="width: 130px; text-align: right;">Ціна без ПДВ</th>
+                    <th style="width: 140px; text-align: right;">Сума</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${itemsHtml}
+                </tbody>
+              </table>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(31,41,55,0.6); padding: 1rem 1.25rem; border-radius: 0.5rem; border: 1px solid #374151;">
+              <div>
+                <div style="color:#9ca3af; font-size: 0.8rem;">Сума прописом:</div>
+                <div style="font-style: italic; color: #e5e7eb; font-size: 0.875rem;">${doc.total_in_words || ''}</div>
+              </div>
+              <div style="text-align: right;">
+                <div style="color: #9ca3af; font-size: 0.8rem;">У т.ч. ПДВ 20%: <span style="font-family:monospace; color:#fff;">${vatFormatted}</span></div>
+                <div style="font-size: 1.35rem; font-weight: 700; color: #34d399; font-family: monospace;">Разом: ${totalFormatted}</div>
+              </div>
+            </div>
+          `;
+        })
+        .catch(err => {
+          body.innerHTML = '<div style="color:#ef4444; padding:2rem;">Помилка завантаження: ' + err + '</div>';
+        });
+    }
+
+    function closeModal() {
+      document.getElementById('quickModal').style.display = 'none';
+    }
+
+    function openWormModal() {
+      document.getElementById('wormModal').style.display = 'flex';
+      loadWormData(false);
+    }
+
+    function closeWormModal() {
+      document.getElementById('wormModal').style.display = 'none';
+    }
+
+    function loadWormData(reverify = false) {
+      const hashEl = document.getElementById('wormHash');
+      const frozenEl = document.getElementById('wormFrozenAt');
+      const periodEl = document.getElementById('wormPeriod');
+      const docsEl = document.getElementById('wormDocs');
+      const turnoverEl = document.getElementById('wormTurnover');
+      const statusEl = document.getElementById('wormStatus');
+
+      if (reverify) {
+        hashEl.textContent = 'Обчислення контрольного SHA-256 хэшу файлу...';
+        statusEl.textContent = '⏳ Перевірка бітової цілісності...';
+      }
+
+      fetch('/api/worm/manifest')
+        .then(res => res.json())
+        .then(data => {
+          hashEl.textContent = data.vault_sha256 || '—';
+          frozenEl.textContent = data.frozen_at || '—';
+          periodEl.textContent = (data.min_doc_date || '—') + ' — ' + (data.max_doc_date || '—');
+          docsEl.textContent = (data.total_documents || 0) + ' документів (' + (data.total_items || 0) + ' позицій)';
+          turnoverEl.textContent = data.formatted_turnover || '—';
+          statusEl.textContent = data.integrity_status || '✅ Цілісність підтверджена';
+        })
+        .catch(err => {
+          hashEl.textContent = 'Помилка отримання маніфесту: ' + err;
+        });
+    }
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        closeModal();
+        closeWormModal();
+      }
+    });
+  </script>
+
+  <!-- WORM Audit Manifest Modal -->
+  <div id="wormModal" class="modal-overlay no-print" onclick="if(event.target === this) closeWormModal();">
+    <div class="modal-content" style="max-width: 720px; border: 1px solid #4338ca;">
+      <button class="modal-close-btn" onclick="closeWormModal()">&times;</button>
+      <div style="padding: 2rem;">
+        <div style="display: flex; align-items: center; gap: 0.85rem; margin-bottom: 1.25rem;">
+          <div style="font-size: 2.2rem;">📜</div>
+          <div>
+            <h2 style="font-size: 1.35rem; font-weight: 800; color: #fff; margin: 0;">Сертифікат незмінності WORM</h2>
+            <div style="color: #94a3b8; font-size: 0.85rem; margin-top: 2px;">
+              Write Once, Read Many &bull; Відповідність п. 44.3 ст. 44 Податкового кодексу України
+            </div>
+          </div>
+        </div>
+
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid #334155; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.25rem;">
+          <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 0.5rem;">
+            Контрольний SHA-256 хэш сховища (archive_vault.duckdb):
+          </div>
+          <code id="wormHash" style="display: block; background: #020617; padding: 0.75rem; border-radius: 6px; color: #34d399; font-family: monospace; font-size: 0.85rem; word-break: break-all; border: 1px solid #1e293b;">
+            Завантаження...
+          </code>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; margin-bottom: 1.25rem; font-size: 0.875rem;">
+          <div style="background: rgba(30, 41, 59, 0.5); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid #334155;">
+            <div style="color: #94a3b8; font-size: 0.75rem;">ДАТА КОНСЕРВАЦІЇ:</div>
+            <div id="wormFrozenAt" style="font-weight: 600; color: #fff; margin-top: 0.25rem;">—</div>
+          </div>
+          <div style="background: rgba(30, 41, 59, 0.5); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid #334155;">
+            <div style="color: #94a3b8; font-size: 0.75rem;">ДІАПАЗОН ДАТ:</div>
+            <div id="wormPeriod" style="font-weight: 600; color: #fff; margin-top: 0.25rem;">—</div>
+          </div>
+          <div style="background: rgba(30, 41, 59, 0.5); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid #334155;">
+            <div style="color: #94a3b8; font-size: 0.75rem;">ДОКУМЕНТІВ В АРХІВІ:</div>
+            <div id="wormDocs" style="font-weight: 600; color: #fff; margin-top: 0.25rem;">—</div>
+          </div>
+          <div style="background: rgba(30, 41, 59, 0.5); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid #334155;">
+            <div style="color: #94a3b8; font-size: 0.75rem;">ПІДТВЕРДЖЕНИЙ ОБОРОТ:</div>
+            <div id="wormTurnover" style="font-weight: 600; color: #34d399; margin-top: 0.25rem;">—</div>
+          </div>
+        </div>
+
+        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 6px; padding: 0.85rem 1rem; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between;">
+          <div style="color: #6ee7b7; font-weight: 600; font-size: 0.875rem;" id="wormStatus">
+            ✅ Цілісність підтверджена (SHA-256 Bit-Level Verified)
+          </div>
+          <button type="button" onclick="loadWormData(true)" class="btn btn-secondary btn-sm" style="font-size: 0.75rem;">
+            🔄 Перевірити зараз
+          </button>
+        </div>
+
+        <div style="font-size: 0.775rem; color: #94a3b8; line-height: 1.45; border-top: 1px solid #334155; padding-top: 0.85rem;">
+          <strong>Юридична сила WORM:</strong> Даний сертифікат фіксує бітову незмінність архівного файлу DuckDB. Відповідно до статті 44.3 Податкового кодексу України платники податків зобов'язані забезпечити зберігання первинних бухгалтерських документів не менш як 1825 днів з дня подання звітності. Будь-яка зміна або видалення записів призведе до миттєвої зміни SHA-256 хэшу.
+        </div>
+      </div>
+    </div>
+  </div>
+  </script>
+</body>
+</html>

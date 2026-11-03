@@ -1,0 +1,319 @@
+{% extends "base.html" %}
+
+{% block title %}Архів первинних документів 1C/BAS | Frozen Explorer{% endblock %}
+
+{% block content %}
+
+<!-- Top Stats Grid -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Документів в архіві</div>
+    <div class="stat-value tabular-nums">{{ stats.total_documents }}</div>
+    <div class="stat-meta">РН, Акти, Рахунки</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-label">Загальний оборот (₴)</div>
+    <div class="stat-value tabular-nums" style="color: #34d399;">{{ stats.formatted_total }}</div>
+    <div class="stat-meta">Точний підрахунок в копійках (BIGINT)</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-label">Контрагентів</div>
+    <div class="stat-value tabular-nums">{{ stats.total_counterparties }}</div>
+    <div class="stat-meta">ТОВ, ПП, ПрАТ, ФОП</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-label">Сховище & Індекс</div>
+    <div class="stat-value" style="font-size: 1.25rem; color: #60a5fa;">DuckDB + Parquet</div>
+    <div class="stat-meta">SQLite FTS5 BM25 (&lt; 50ms)</div>
+  </div>
+</div>
+
+<!-- Search & Filtering Card -->
+<div class="search-card">
+  <form id="searchForm" method="GET" action="/" class="search-form">
+    <!-- Instant Text Search Input -->
+    <div class="search-input-wrapper">
+      <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+      </svg>
+      <input 
+        type="text" 
+        id="searchInput" 
+        name="q" 
+        value="{{ query }}" 
+        class="search-input" 
+        placeholder="Пошук за назвою контрагента, ЄДРПОУ, номером документа або послугою..." 
+        autocomplete="off"
+      >
+      <!-- Autocomplete Dropdown List -->
+      <div id="autocompleteList" class="autocomplete-dropdown"></div>
+    </div>
+
+    <!-- Multi-Organization Filter -->
+    <select name="our_company_id" id="orgSelect" class="filter-select" onchange="this.form.submit()">
+      <option value="" {% if not selected_org %}selected{% endif %}>Всі наші організації</option>
+      {% for org in stats.our_companies %}
+        <option value="{{ org.id }}" {% if selected_org == org.id %}selected{% endif %}>{{ org.name }}</option>
+      {% endfor %}
+    </select>
+
+    <!-- Document Type Filter -->
+    <select name="doc_type" id="docTypeSelect" class="filter-select" onchange="this.form.submit()">
+      <option value="" {% if not current_type %}selected{% endif %}>Всі типи документів</option>
+      {% for dt in stats.doc_types %}
+        <option value="{{ dt }}" {% if current_type == dt %}selected{% endif %}>{{ dt }}</option>
+      {% endfor %}
+    </select>
+
+    <!-- Year Filter -->
+    <select name="year" id="yearSelect" class="filter-select" onchange="this.form.submit()">
+      <option value="" {% if not current_year %}selected{% endif %}>Всі роки</option>
+      {% for y in stats.years %}
+        <option value="{{ y }}" {% if current_year == y %}selected{% endif %}>{{ y }} рік</option>
+      {% endfor %}
+    </select>
+
+    <!-- Search Button -->
+    <button type="submit" class="btn btn-primary">
+      Знайти
+    </button>
+
+    <!-- Reset Button -->
+    {% if query or current_type or current_year or selected_org %}
+      <a href="/" class="btn btn-outline" title="Скинути всі фільтри">
+        Скинути
+      </a>
+    {% endif %}
+
+    <!-- Excel Export Button for current filter/search -->
+    <a 
+      href="/export/search/excel?q={{ query | urlencode }}&doc_type={{ current_type | urlencode }}&year={{ current_year or '' }}&our_company_id={{ selected_org or '' }}" 
+      class="btn btn-success" 
+      title="Експортувати поточну відфільтровану вибірку в Excel"
+    >
+      <span>📊 Експорт в Excel</span>
+    </a>
+  </form>
+</div>
+
+<!-- Table Header & Timing -->
+<div class="table-wrapper">
+  <div class="table-header-info" style="display: flex; flex-direction: column; gap: 0.75rem;">
+    
+    <!-- Status & Timing Row -->
+    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 0.5rem;">
+      <div style="font-size: 0.9rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <span>Знайдено записів: <strong style="color: #fff; font-size: 1rem;">{{ total_count }}</strong></span>
+        {% if query %}
+          <span>для запиту <span style="color:#60a5fa; font-weight:600; background: rgba(59,130,246,0.15); padding: 0.15rem 0.5rem; border-radius: 4px;">"{{ query }}"</span></span>
+        {% endif %}
+        {% if detected_counterparty %}
+          <span style="display: inline-flex; align-items: center; gap: 0.35rem; color: #93c5fd; font-size: 0.85rem; background: rgba(30,58,138,0.4); padding: 0.2rem 0.6rem; border-radius: 4px; border: 1px solid rgba(59,130,246,0.3);">
+            🏢 <strong>{{ detected_counterparty.name }}</strong> (ЄДРПОУ/ІПН: {{ detected_counterparty.edrpou }})
+          </span>
+        {% endif %}
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: var(--text-muted);">
+        <span style="display:inline-block; width:6px; height:6px; background:#10b981; border-radius:50%;"></span>
+        Час запиту: <strong style="color: #34d399;">{{ execution_ms }} ms</strong> (FTS5 BM25)
+      </div>
+    </div>
+
+    <!-- Contextual Reports Action Bar -->
+    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; padding-top: 0.65rem; border-top: 1px solid rgba(51,65,85,0.6); flex-wrap: wrap; gap: 0.5rem;">
+      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        {% if detected_counterparty %}
+          <a href="/reconciliation/{{ detected_counterparty.edrpou }}?our_company_id={{ selected_org or '' }}&year={{ current_year or '' }}" target="_blank" class="btn btn-primary btn-sm" style="font-weight: 600; box-shadow: 0 2px 6px rgba(37,99,235,0.4);" title="Зведений акт звірки взаєморозрахунків з {{ detected_counterparty.name }}">
+            📑 Сформувати Акт звірки
+          </a>
+        {% endif %}
+
+        <a href="/reports/dps-registry?q={{ query | urlencode }}&our_company_id={{ selected_org or '' }}&year={{ current_year or '' }}&doc_type={{ current_type or '' }}" target="_blank" class="btn btn-outline btn-sm" style="border-color: #60a5fa; color: #93c5fd; font-weight: 500;" title="Офіційний зведений реєстр-опис первинних документів для перевірки ДПС України">
+          📋 Реєстр для ДПС (Друк/PDF)
+        </a>
+
+        <a href="/export/search/excel?q={{ query | urlencode }}&doc_type={{ current_type | urlencode }}&year={{ current_year or '' }}&our_company_id={{ selected_org or '' }}" class="btn btn-success btn-sm" style="font-weight: 500;" title="Вивантажити поточний відфільтрований зріз у форматі Excel">
+          📊 Експорт в Excel (.xlsx)
+        </a>
+      </div>
+
+      <div style="font-size: 0.775rem; color: #94a3b8;">
+        {% if detected_counterparty %}
+          Режим контрагента: доступні зведені акти та податковий опис
+        {% else %}
+          Звітність за відфільтрованою вибіркою первинних документів
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+  <div class="table-scroll">
+    <table class="archive-table">
+      <thead>
+        <tr>
+          <th style="width: 125px;">Тип</th>
+          <th style="width: 95px; text-align: center;">Номер</th>
+          <th style="width: 90px; text-align: center; white-space: nowrap;">Дата</th>
+          <th style="width: 145px;">Наша організація</th>
+          <th>Контрагент / Одержувач</th>
+          <th style="width: 105px; text-align: center;">ЄДРПОУ / ІПН</th>
+          <th style="width: 120px; text-align: right;">Сума з ПДВ</th>
+          <th style="max-width: 180px;">Коментар / Фрагмент</th>
+          <th style="width: 125px; text-align: center;">Дії</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if results %}
+          {% for doc in results %}
+            <tr>
+              <td>
+                <span class="badge {% if 'Видаткова' in doc.doc_type %}badge-doc-rn{% elif 'Акт' in doc.doc_type %}badge-doc-akt{% elif 'Платіж' in doc.doc_type or 'Банк' in doc.doc_type %}badge-doc-pay{% else %}badge-doc-sf{% endif %}" style="font-size: 0.7rem; padding: 0.15rem 0.45rem;">
+                  {{ doc.doc_type }}
+                </span>
+              </td>
+              <td style="text-align: center;">
+                <a href="javascript:void(0)" onclick="openModal('{{ doc.doc_id }}')" style="color: #60a5fa; font-weight: 600; text-decoration: underline; text-underline-offset: 3px;">
+                  {{ doc.doc_number }}
+                </a>
+              </td>
+              <td style="text-align: center; color: #9ca3af; font-family: monospace; white-space: nowrap; font-variant-numeric: tabular-nums;">
+                {{ doc.doc_date | format_date_ua }}
+              </td>
+              <td>
+                <span style="font-size: 0.75rem; color: #93c5fd; background: rgba(30, 58, 138, 0.35); border: 1px solid rgba(59, 130, 246, 0.3); padding: 0.15rem 0.4rem; border-radius: 4px; display: inline-block; white-space: nowrap;">
+                  {{ doc.our_company_name }}
+                </span>
+              </td>
+              <td>
+                <div style="font-weight: 500; max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ doc.counterparty_name }}">
+                  <a href="/?q={{ doc.counterparty_edrpou }}&our_company_id={{ selected_org or '' }}" style="color: #fff; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Фільтрувати та відкрити звіти для {{ doc.counterparty_name }}">
+                    {{ doc.counterparty_name }}
+                  </a>
+                </div>
+              </td>
+              <td style="text-align: center;">
+                <a href="/?q={{ doc.counterparty_edrpou }}&our_company_id={{ selected_org or '' }}" style="text-decoration: none;" title="Фільтрувати за кодом {{ doc.counterparty_edrpou }}">
+                  <span style="font-family: monospace; color: #93c5fd; background: rgba(55,65,81,0.6); padding: 0.15rem 0.4rem; border-radius: 0.25rem;">
+                    {{ doc.counterparty_edrpou }}
+                  </span>
+                </a>
+              </td>
+              <td class="amount-col">
+                {{ doc.formatted_total }}
+              </td>
+              <td style="font-size: 0.75rem; color: #9ca3af; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ doc.comment or '' }}">
+                {% if doc.snippet %}
+                  {{ doc.snippet | safe }}
+                {% elif doc.comment %}
+                  {{ doc.comment }}
+                {% else %}
+                  <span style="color: #4b5563;">—</span>
+                {% endif %}
+              </td>
+              <td style="text-align: center; white-space: nowrap;">
+                <div style="display: inline-flex; gap: 0.3rem; align-items: center; justify-content: center;">
+                  <button type="button" onclick="openModal('{{ doc.doc_id }}')" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.45rem; font-size: 0.725rem;" title="Швидкий перегляд картки документа">
+                    👁 Картка
+                  </button>
+                  <a href="/document/{{ doc.doc_id }}/print" target="_blank" class="btn btn-outline btn-sm" style="padding: 0.25rem 0.45rem; font-size: 0.725rem;" title="Друк первинного документа А4 (Ctrl+P)">
+                    🖨 Друк
+                  </a>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="9" style="text-align: center; padding: 3rem; color: var(--text-muted);">
+              За вашим запитом документів не знайдено. Спробуйте змінити фільтри або пошукове слово.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination Controls -->
+  {% if total_pages > 1 %}
+    <div class="pagination">
+      <div style="font-size: 0.85rem; color: var(--text-secondary);">
+        Сторінка <strong style="color: #fff;">{{ current_page }}</strong> з {{ total_pages }}
+      </div>
+
+      <div style="display: flex; gap: 0.5rem;">
+        {% if current_page > 1 %}
+          <a href="/?q={{ query | urlencode }}&doc_type={{ current_type | urlencode }}&year={{ current_year or '' }}&page={{ current_page - 1 }}" class="btn btn-secondary btn-sm">
+            &larr; Попередня
+          </a>
+        {% endif %}
+
+        {% if current_page < total_pages %}
+          <a href="/?q={{ query | urlencode }}&doc_type={{ current_type | urlencode }}&year={{ current_year or '' }}&page={{ current_page + 1 }}" class="btn btn-secondary btn-sm">
+            Наступна &rarr;
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Autocomplete & Instant Search Logic -->
+<script>
+  const searchInput = document.getElementById('searchInput');
+  const dropdown = document.getElementById('autocompleteList');
+  let debounceTimeout = null;
+
+  searchInput.addEventListener('input', function() {
+    clearTimeout(debounceTimeout);
+    const val = this.value.trim();
+
+    if (val.length < 2) {
+      dropdown.style.display = 'none';
+      return;
+    }
+
+    debounceTimeout = setTimeout(() => {
+      fetch('/api/suggest?q=' + encodeURIComponent(val))
+        .then(r => r.json())
+        .then(items => {
+          if (!items || items.length === 0) {
+            dropdown.style.display = 'none';
+            return;
+          }
+          dropdown.innerHTML = '';
+          items.forEach(it => {
+            const row = document.createElement('div');
+            row.className = 'autocomplete-item';
+            row.innerHTML = `
+              <span>${it.text}</span>
+              <span class="badge ${it.type === 'Контрагент' ? 'badge-airgap' : 'badge-zerotoken'}">${it.type}</span>
+            `;
+            row.addEventListener('click', () => {
+              searchInput.value = it.value;
+              dropdown.style.display = 'none';
+              document.getElementById('searchForm').submit();
+            });
+            dropdown.appendChild(row);
+          });
+          dropdown.style.display = 'block';
+        })
+        .catch(() => {
+          dropdown.style.display = 'none';
+        });
+    }, 180);
+  });
+
+  // Close dropdown on click outside
+  document.addEventListener('click', function(e) {
+    if (!dropdown.contains(e.target) && e.target !== searchInput) {
+      dropdown.style.display = 'none';
+    }
+  });
+</script>
+
+{% endblock %}

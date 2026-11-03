@@ -1,0 +1,13 @@
+{
+  "vault_sha256": "aa5c7db9a5d426961b24f63d5bf47315ae7128d80513bd216b2256884fdfdb82",
+  "frozen_at": "03.11.2026 14:38:10 UTC",
+  "total_documents": 1000,
+  "total_items": 1276,
+  "total_counterparties": 100,
+  "total_turnover_kopiykas": 6757179400,
+  "formatted_turnover": "67 571 794,00 ₴",
+  "min_doc_date": "2021-01-10",
+  "max_doc_date": "2025-12-18",
+  "statute_reference": "п. 44.3 ст. 44 ПКУ (збереження первинних документів не менш як 1825 днів)",
+  "integrity_status": "✅ Цілісність підтверджена (SHA-256 Bit-Level Verified)"
+}

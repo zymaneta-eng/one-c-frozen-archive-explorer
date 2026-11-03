@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ doc.doc_type }} № {{ doc.doc_number }} від {{ doc.doc_date }}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    /* Specific print layout overrides */
+    body {
+      background: #f3f4f6;
+      color: #111827;
+      margin: 0;
+      padding: 0;
+    }
+    .print-sheet {
+      background: #fff;
+      max-width: 860px;
+      margin: 20px auto;
+      padding: 40px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      border-radius: 4px;
+      font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+      font-size: 10.5pt;
+      color: #000;
+    }
+    .print-controls-bar {
+      max-width: 860px;
+      margin: 20px auto 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    table.print-grid {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+      font-size: 9.5pt;
+    }
+    table.print-grid th, table.print-grid td {
+      border: 1px solid #000;
+      padding: 5px 6px;
+      color: #000;
+    }
+    table.print-grid th {
+      background-color: #f3f4f6;
+      text-align: center;
+      font-weight: bold;
+    }
+    .signatures-block {
+      margin-top: 35px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 10pt;
+    }
+    .sig-col {
+      width: 45%;
+    }
+    .sig-line {
+      border-bottom: 1px solid #000;
+      margin-top: 30px;
+      margin-bottom: 5px;
+    }
+    @media print {
+      body {
+        background: #fff !important;
+      }
+      .print-controls-bar {
+        display: none !important;
+      }
+      .print-sheet {
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        max-width: 100% !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top action buttons (hidden when printing) -->
+  <div class="print-controls-bar no-print">
+    <a href="/document/{{ doc.id }}" class="btn btn-secondary btn-sm">
+      &larr; Назад до картки
+    </a>
+    <div style="display: flex; gap: 0.5rem;">
+      <button onclick="window.print()" class="btn btn-primary btn-sm">
+        🖨️ Друкувати документ (Ctrl+P)
+      </button>
+      <a href="/export/document/{{ doc.id }}/excel" class="btn btn-success btn-sm">
+        📊 Excel (.xlsx)
+      </a>
+    </div>
+  </div>
+
+  <!-- Physical A4 Printable Sheet -->
+  <div class="print-sheet">
+    <div style="text-align: right; font-size: 8pt; color: #4b5563; margin-bottom: 10px;">
+      Архівний примірник первинного документа &bull; Ідентифікатор: {{ doc.id }}
+    </div>
+
+    <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 15px;">
+      <h1 style="font-size: 15pt; font-weight: bold; margin: 0; text-transform: uppercase;">
+        {{ doc.doc_type }} № {{ doc.doc_number }}
+      </h1>
+      <div style="font-size: 11pt; font-weight: bold; margin-top: 4px;">
+        від {{ doc.doc_date | format_date_ua }} р.
+      </div>
+    </div>
+
+    <!-- Credential Details Table -->
+    <table style="width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-bottom: 15px;">
+      <tr>
+        <td style="width: 130px; vertical-align: top; font-weight: bold; padding: 3px 0;">Постачальник:</td>
+        <td style="vertical-align: top; padding: 3px 0;">
+          {% if doc.our_company_id == 'org_02' %}
+            <strong>ФОП "Ареонікс-Сервіс"</strong>, ІПН: <strong>3124598712</strong><br>
+            79039, м. Львів, вул. Шевченка, 111А, оф. 15<br>
+            IBAN: UA843004650000026009876543210 в АТ "Ощадбанк", МФО 300465
+          {% else %}
+            <strong>ТОВ "Ареонікс Діджитал"</strong>, Код ЄДРПОУ: <strong>43981245</strong><br>
+            01001, м. Київ, вул. Хрещатик, 22, оф. 401<br>
+            IBAN: UA213052990000026001234567890 в АТ КБ "ПриватБанк", МФО 305299
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td style="vertical-align: top; font-weight: bold; padding: 3px 0;">Одержувач:</td>
+        <td style="vertical-align: top; padding: 3px 0;">
+          <strong>{{ doc.counterparty_name }}</strong>, Код ЄДРПОУ / ІПН: <strong>{{ doc.counterparty_edrpou }}</strong><br>
+          {% if doc.counterparty %}
+            {{ doc.counterparty.address or '' }}<br>
+            {% if doc.counterparty.iban %}
+              IBAN: {{ doc.counterparty.iban }} в {{ doc.counterparty.bank_name or '' }}
+            {% endif %}
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td style="vertical-align: top; font-weight: bold; padding: 3px 0;">Підстава:</td>
+        <td style="vertical-align: top; padding: 3px 0;">
+          {{ doc.contract_number or 'Рахунок-фактура або замовлення' }}
+        </td>
+      </tr>
+      {% if doc.comment %}
+      <tr>
+        <td style="vertical-align: top; font-weight: bold; padding: 3px 0;">Примітка:</td>
+        <td style="vertical-align: top; padding: 3px 0; font-style: italic;">
+          {{ doc.comment }}
+        </td>
+      </tr>
+      {% endif %}
+    </table>
+
+    <!-- Line Items Table -->
+    <table class="print-grid">
+      <thead>
+        <tr>
+          <th style="width: 30px;">№</th>
+          <th>Товари (роботи, послуги)</th>
+          <th style="width: 50px;">Од.</th>
+          <th style="width: 60px;">К-сть</th>
+          <th style="width: 100px;">Ціна без ПДВ</th>
+          <th style="width: 110px;">Сума без ПДВ</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in doc.items %}
+          <tr>
+            <td style="text-align: center;">{{ it.line_num }}</td>
+            <td>
+              {{ it.item_name }}
+              {% if it.sku %}<span style="font-size: 8pt; color: #4b5563;">({{ it.sku }})</span>{% endif %}
+            </td>
+            <td style="text-align: center;">{{ it.unit }}</td>
+            <td style="text-align: right;">{{ it.quantity }}</td>
+            <td style="text-align: right;">{{ it.formatted_unit_price }}</td>
+            <td style="text-align: right; font-weight: bold;">{{ it.formatted_amount }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Totals Table -->
+    <div style="display: flex; justify-content: flex-end;">
+      <table style="width: 320px; border-collapse: collapse; font-size: 9.5pt;">
+        <tr>
+          <td style="padding: 2px 5px; text-align: right;">Разом без ПДВ:</td>
+          <td style="padding: 2px 5px; text-align: right; font-weight: bold; width: 120px;">{{ doc.formatted_without_vat }}</td>
+        </tr>
+        <tr>
+          <td style="padding: 2px 5px; text-align: right;">ПДВ 20%:</td>
+          <td style="padding: 2px 5px; text-align: right; font-weight: bold;">{{ doc.formatted_vat }}</td>
+        </tr>
+        <tr style="border-top: 1.5px solid #000;">
+          <td style="padding: 4px 5px; text-align: right; font-weight: bold; font-size: 11pt;">Всього з ПДВ:</td>
+          <td style="padding: 4px 5px; text-align: right; font-weight: bold; font-size: 11pt;">{{ doc.formatted_total }}</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Amount in Words -->
+    <div style="margin-top: 15px; font-size: 9.5pt;">
+      Всього найменувань <strong>{{ doc.items | length }}</strong>, на суму <strong>{{ doc.formatted_total }}</strong><br>
+      <strong>Сума прописом:</strong> <em>{{ doc.total_in_words }}</em>
+    </div>
+
+    <!-- Official Signatures Block -->
+    <div class="signatures-block">
+      <div class="sig-col">
+        <div><strong>Від Постачальника ({{ doc.our_company_name }}):</strong></div>
+        <div class="sig-line"></div>
+        <div style="font-size: 8pt; text-align: center; color: #4b5563;">(підпис, прізвище, ініціали)</div>
+        <div style="margin-top: 15px; font-size: 9pt;">М.П.</div>
+      </div>
+
+      <div class="sig-col">
+        <div><strong>Від Одержувача (Замовника):</strong></div>
+        <div class="sig-line"></div>
+        <div style="font-size: 8pt; text-align: center; color: #4b5563;">(підпис, прізвище, ініціали)</div>
+        <div style="margin-top: 15px; font-size: 9pt;">М.П.</div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

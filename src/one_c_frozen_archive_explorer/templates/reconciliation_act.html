@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Акт звірки взаєморозрахунків: {{ report.counterparty.name }} | Frozen Archive</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    body {
+      background-color: #0f172a;
+      color: #1e293b;
+      margin: 0;
+      padding: 0;
+    }
+    .recon-sheet {
+      background: #ffffff;
+      max-width: 980px;
+      margin: 24px auto 40px auto;
+      padding: 48px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+      border-radius: 6px;
+      font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+      font-size: 10pt;
+      line-height: 1.4;
+      color: #000;
+    }
+    .recon-controls-bar {
+      max-width: 980px;
+      margin: 20px auto 0 auto;
+      padding: 0.75rem 1.25rem;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .recon-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 18px 0;
+      font-size: 9pt;
+    }
+    .recon-table th, .recon-table td {
+      border: 1px solid #000;
+      padding: 5px 7px;
+    }
+    .recon-table th {
+      background-color: #f1f5f9;
+      font-weight: bold;
+      text-align: center;
+    }
+    .recon-signatures {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 40px;
+      padding-top: 20px;
+    }
+    .recon-sign-box {
+      width: 46%;
+      font-size: 9.5pt;
+    }
+    .sign-line {
+      border-bottom: 1px solid #000;
+      height: 36px;
+      margin-top: 8px;
+      margin-bottom: 4px;
+    }
+    @media print {
+      body {
+        background: #fff !important;
+      }
+      .recon-controls-bar, .no-print {
+        display: none !important;
+      }
+      .recon-sheet {
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        max-width: 100% !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Action & Filter Controls -->
+  <div class="recon-controls-bar no-print">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <a href="/" class="btn btn-outline btn-sm">
+        &larr; До архіву
+      </a>
+      <span style="font-weight: 600; color: #fff; font-size: 0.95rem;">
+        Акт звірки взаєморозрахунків
+      </span>
+    </div>
+
+    <!-- Filter form for period & organization -->
+    <form method="GET" action="/reconciliation/{{ report.counterparty.id }}" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+      <!-- Organization selector -->
+      <select name="our_company_id" class="filter-select" style="padding: 0.35rem 0.65rem; font-size: 0.85rem;" onchange="this.form.submit()">
+        {% for org in our_companies %}
+          <option value="{{ org.id }}" {% if selected_org == org.id %}selected{% endif %}>
+            {{ org.name }}
+          </option>
+        {% endfor %}
+      </select>
+
+      <span style="color: #94a3b8; font-size: 0.85rem;">Період:</span>
+      <input type="date" name="start_date" value="{{ report.start_date }}" style="background:#0f172a; border:1px solid #334155; color:#fff; padding:0.3rem 0.5rem; border-radius:4px; font-size:0.85rem;">
+      <span style="color: #94a3b8; font-size: 0.85rem;">—</span>
+      <input type="date" name="end_date" value="{{ report.end_date }}" style="background:#0f172a; border:1px solid #334155; color:#fff; padding:0.3rem 0.5rem; border-radius:4px; font-size:0.85rem;">
+
+      <button type="submit" class="btn btn-primary btn-sm">
+        Перерахувати
+      </button>
+
+      <a href="/export/reconciliation/{{ report.counterparty.id }}/excel?our_company_id={{ selected_org or report.our_company_id }}&start_date={{ report.start_date }}&end_date={{ report.end_date }}" class="btn btn-success btn-sm" title="Завантажити акт звірки у форматі Excel">
+        📥 Експорт в Excel (.xlsx)
+      </a>
+
+      <button type="button" onclick="window.print()" class="btn btn-primary btn-sm" title="Друкувати бланк акта звірки">
+        🖨️ Друкувати (Ctrl+P)
+      </button>
+    </form>
+  </div>
+
+  <!-- A4 Printable Sheet -->
+  <div class="recon-sheet">
+    <div style="text-align: right; font-size: 8pt; color: #64748b; margin-bottom: 15px;">
+      Архівний фінансовий документ &bull; Ідентифікатор контрагента: {{ report.counterparty.id }}
+    </div>
+
+    <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 20px;">
+      <h1 style="font-size: 15pt; font-weight: bold; margin: 0; text-transform: uppercase; letter-spacing: 0.5px;">
+        АКТ ЗВІРКИ ВЗАЄМНИХ РОЗРАХУНКІВ
+      </h1>
+      <div style="font-size: 10.5pt; font-weight: bold; margin-top: 6px;">
+        за період: з {{ report.start_date | format_date_ua }} по {{ report.end_date | format_date_ua }}
+      </div>
+    </div>
+
+    <!-- Preamble -->
+    <div style="text-align: justify; margin-bottom: 16px; font-size: 9.5pt;">
+      Ми, що нижче підписалися, представник <strong>{{ report.our_company_name }}</strong> (код за ЄДРПОУ {{ report.our_company_edrpou }}), з одного боку, та представник <strong>{{ report.counterparty.name }}</strong> (код за ЄДРПОУ / ІПН {{ report.counterparty.edrpou }}), з іншого боку, склали цей акт про те, що стан взаємних розрахунків за первинними бухгалтерськими документами станом на <strong>{{ report.end_date | format_date_ua }}</strong> характеризується такими даними:
+    </div>
+
+    <!-- Dual Ledger Table -->
+    <table class="recon-table">
+      <thead>
+        <tr>
+          <th colspan="4" style="width: 50%;">За даними {{ report.our_company_name }}</th>
+          <th colspan="4" style="width: 50%;">За даними {{ report.counterparty.name }}</th>
+        </tr>
+        <tr>
+          <th style="width: 70px;">Дата</th>
+          <th>Документ</th>
+          <th style="width: 85px;">Дебет (грн)</th>
+          <th style="width: 85px;">Кредит (грн)</th>
+          <th style="width: 70px;">Дата</th>
+          <th>Документ</th>
+          <th style="width: 85px;">Дебет (грн)</th>
+          <th style="width: 85px;">Кредит (грн)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Opening Balance -->
+        <tr style="background-color: #f8fafc; font-weight: bold;">
+          <td colspan="2" style="text-align: right;">Сальдо початкове на {{ report.start_date | format_date_ua }}:</td>
+          <td style="text-align: right;">
+            {% if report.opening_balance_kopiykas > 0 %}{{ report.opening_balance_formatted }}{% else %}—{% endif %}
+          </td>
+          <td style="text-align: right;">
+            {% if report.opening_balance_kopiykas < 0 %}{{ report.opening_balance_formatted }}{% else %}—{% endif %}
+          </td>
+          <td colspan="2" style="text-align: right;">Сальдо початкове:</td>
+          <td style="text-align: right;">
+            {% if report.opening_balance_kopiykas < 0 %}{{ report.opening_balance_formatted }}{% else %}—{% endif %}
+          </td>
+          <td style="text-align: right;">
+            {% if report.opening_balance_kopiykas > 0 %}{{ report.opening_balance_formatted }}{% else %}—{% endif %}
+          </td>
+        </tr>
+
+        <!-- Entries -->
+        {% if report.entries %}
+          {% for entry in report.entries %}
+            <tr>
+              <td style="text-align: center; font-family: monospace;">{{ entry.date | format_date_ua }}</td>
+              <td>{{ entry.doc_type }} № {{ entry.doc_number }}</td>
+              <td style="text-align: right; font-family: monospace;">{{ entry.debit_formatted }}</td>
+              <td style="text-align: right; font-family: monospace;">{{ entry.credit_formatted }}</td>
+              <!-- Mirror side for counterparty -->
+              <td style="text-align: center; font-family: monospace;">{{ entry.date | format_date_ua }}</td>
+              <td>{{ entry.doc_type }} № {{ entry.doc_number }}</td>
+              <td style="text-align: right; font-family: monospace;">{{ entry.credit_formatted }}</td>
+              <td style="text-align: right; font-family: monospace;">{{ entry.debit_formatted }}</td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="8" style="text-align: center; color: #64748b; padding: 15px;">
+              За вказаний період первинних документів взаєморозрахунків не зареєстровано
+            </td>
+          </tr>
+        {% endif %}
+
+        <!-- Period Turnover -->
+        <tr style="background-color: #f1f5f9; font-weight: bold;">
+          <td colspan="2" style="text-align: right;">Оборот за період:</td>
+          <td style="text-align: right; font-family: monospace;">{{ report.total_debit_formatted }}</td>
+          <td style="text-align: right; font-family: monospace;">{{ report.total_credit_formatted }}</td>
+          <td colspan="2" style="text-align: right;">Оборот за період:</td>
+          <td style="text-align: right; font-family: monospace;">{{ report.total_credit_formatted }}</td>
+          <td style="text-align: right; font-family: monospace;">{{ report.total_debit_formatted }}</td>
+        </tr>
+
+        <!-- Closing Balance -->
+        <tr style="background-color: #e2e8f0; font-weight: bold; font-size: 9.5pt;">
+          <td colspan="2" style="text-align: right;">Сальдо кінцеве на {{ report.end_date | format_date_ua }}:</td>
+          <td style="text-align: right; font-family: monospace; color: #0f172a;">
+            {% if report.closing_balance_kopiykas > 0 %}{{ report.closing_balance_formatted }}{% else %}—{% endif %}
+          </td>
+          <td style="text-align: right; font-family: monospace; color: #0f172a;">
+            {% if report.closing_balance_kopiykas < 0 %}{{ report.closing_balance_formatted }}{% else %}—{% endif %}
+          </td>
+          <td colspan="2" style="text-align: right;">Сальдо кінцеве:</td>
+          <td style="text-align: right; font-family: monospace; color: #0f172a;">
+            {% if report.closing_balance_kopiykas < 0 %}{{ report.closing_balance_formatted }}{% else %}—{% endif %}
+          </td>
+          <td style="text-align: right; font-family: monospace; color: #0f172a;">
+            {% if report.closing_balance_kopiykas > 0 %}{{ report.closing_balance_formatted }}{% else %}—{% endif %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Verbal Result Box -->
+    <div style="border: 1px solid #000; padding: 12px 16px; margin: 20px 0; background: #fafafa;">
+      <div style="font-weight: bold; margin-bottom: 4px;">Підсумок взаємних розрахунків:</div>
+      <div style="font-size: 10pt; line-height: 1.5;">
+        {{ report.closing_balance_in_words }}.
+      </div>
+    </div>
+
+    <!-- Legal Compliance Footnote -->
+    <div style="font-size: 8pt; color: #475569; margin-top: 15px; text-align: justify;">
+      * Акт сформовано на підставі первинних бухгалтерських документів, законсервованих у захищеному сховищі DuckDB / Snappy Parquet відповідно до вимог п. 44.3 статті 44 Податкового кодексу України щодо забезпечення збереження первинних документів протягом визначеного законодавством строку (1825 днів).
+    </div>
+
+    <!-- Signatures and Stamps Block -->
+    <div class="recon-signatures">
+      <div class="recon-sign-box">
+        <strong>Від {{ report.our_company_name }}:</strong><br><br>
+        <span style="font-size: 8.5pt; color: #334155;">Керівник / Головний бухгалтер:</span>
+        <div class="sign-line"></div>
+        <div style="display: flex; justify-content: space-between; font-size: 8pt; color: #64748b;">
+          <span>(підпис)</span>
+          <span>(ініціали, прізвище)</span>
+        </div>
+        <div style="margin-top: 25px; font-weight: bold; font-size: 8.5pt;">М. П.</div>
+      </div>
+
+      <div class="recon-sign-box">
+        <strong>Від {{ report.counterparty.name }}:</strong><br><br>
+        <span style="font-size: 8.5pt; color: #334155;">Керівник / Головний бухгалтер:</span>
+        <div class="sign-line"></div>
+        <div style="display: flex; justify-content: space-between; font-size: 8pt; color: #64748b;">
+          <span>(підпис)</span>
+          <span>(ініціали, прізвище)</span>
+        </div>
+        <div style="margin-top: 25px; font-weight: bold; font-size: 8.5pt;">М. П.</div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
