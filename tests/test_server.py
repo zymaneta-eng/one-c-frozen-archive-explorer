@@ -118,12 +118,37 @@ def test_export_search_results_excel(client: TestClient):
     ws = wb.active
     assert ws.title == "Результати пошуку"
     # Check headers
-    assert ws["B1"].value == "Наша організація"
-    assert ws["C1"].value == "Тип документа"
-    assert ws["D1"].value == "Номер документа"
-    assert ws["H1"].value == "Сума з ПДВ (грн)"
+    assert ws["B1"].value == "Напрямок"
+    assert ws["C1"].value == "Наша організація"
+    assert ws["D1"].value == "Тип документа"
+    assert ws["E1"].value == "Номер документа"
+    assert ws["I1"].value == "Сума з ПДВ (грн)"
     # At least header + 1 row
     assert ws.max_row >= 2
+
+
+def test_role_switcher_and_permissions(client: TestClient):
+    """Test role switching cookie and permissions enforcement."""
+    # Switch to TOV accountant
+    resp = client.get("/api/auth/role?role=accountant_tov", follow_redirects=False)
+    assert resp.status_code == 303
+    assert "user_role=accountant_tov" in resp.headers.get("set-cookie", "")
+
+    # Switch to DPS Auditor (Read-only)
+    resp_auditor = client.get("/api/auth/role?role=auditor_dps", follow_redirects=False)
+    assert resp_auditor.status_code == 303
+
+    # Check auditor cannot download cold backup (403)
+    client.cookies.set("user_role", "auditor_dps")
+    resp_backup = client.get("/api/backup/download")
+    assert resp_backup.status_code == 403
+
+    # Chief accountant CAN download cold backup
+    client.cookies.set("user_role", "chief_accountant")
+    resp_backup_ok = client.get("/api/backup/download")
+    assert resp_backup_ok.status_code == 200
+    assert "application/zip" in resp_backup_ok.headers["content-type"]
+    assert "Frozen_Archive_ColdBackup_" in resp_backup_ok.headers["content-disposition"]
 
 
 def test_document_not_found(client: TestClient):

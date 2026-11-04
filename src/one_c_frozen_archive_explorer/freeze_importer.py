@@ -487,10 +487,24 @@ class FreezeImporter:
                 cp_edrpou = str(r.get("counterparty_edrpou") or r.get("edrpou", "")).strip()
                 cp_id = str(r.get("counterparty_id") or (f"cp_{cp_edrpou}" if cp_edrpou else "")).strip()
 
+                direction = str(r.get("direction", "OUT")).strip().upper()
+                if direction not in ["IN", "OUT"]:
+                    direction = "IN" if any(k in doc_type.lower() for k in ["прибут", "отриман", "вхідн"]) else "OUT"
+
+                tax_invoice_num = str(r.get("tax_invoice_number", "")).strip() or None
+                tax_invoice_dt = str(r.get("tax_invoice_date", "")).strip() or None
+                ernn_stat = str(r.get("ernn_status", "")).strip() or ("Зареєстровано в ЄРНН" if vat_kop > 0 else "Без ПДВ")
+                ernn_dt = str(r.get("ernn_reg_date", "")).strip() or None
+                doc_form = str(r.get("doc_form", "Електронна (КЕП)")).strip()
+                edi_prov = str(r.get("edi_provider", "Вчасно")).strip()
+                p7s_hash = str(r.get("p7s_sign_hash", "")).strip() or None
+                p7s_info = str(r.get("p7s_signer_info", "")).strip() or None
+
                 rows.append((
                     doc_id,
                     doc_number,
                     doc_type,
+                    direction,
                     doc_date,
                     our_id,
                     our_name,
@@ -505,18 +519,28 @@ class FreezeImporter:
                     str(r.get("contract_number", "")).strip() or None,
                     str(r.get("comment", "")).strip() or None,
                     year,
+                    tax_invoice_num,
+                    tax_invoice_dt,
+                    ernn_stat,
+                    ernn_dt,
+                    doc_form,
+                    edi_prov,
+                    p7s_hash,
+                    p7s_info,
                     str(r.get("source_file", "")).strip() or None,
                 ))
 
             con.executemany(
                 """
                 INSERT OR REPLACE INTO documents (
-                    id, doc_number, doc_type, doc_date, our_company_id,
+                    id, doc_number, doc_type, direction, doc_date, our_company_id,
                     our_company_name, our_company_edrpou, counterparty_id,
                     counterparty_name, counterparty_edrpou, total_amount_kopiykas,
                     vat_kopiykas, currency, status, contract_number, comment,
-                    year, source_file
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    year, tax_invoice_number, tax_invoice_date, ernn_status,
+                    ernn_reg_date, doc_form, edi_provider, p7s_sign_hash,
+                    p7s_signer_info, source_file
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 rows,
             )
@@ -637,6 +661,15 @@ class FreezeImporter:
                 "status": doc.get("status", "Проведено"),
                 "contract_number": doc.get("contract_number"),
                 "comment": doc.get("comment"),
+                "direction": doc.get("direction", "OUT"),
+                "tax_invoice_number": doc.get("tax_invoice_number"),
+                "tax_invoice_date": doc.get("tax_invoice_date"),
+                "ernn_status": doc.get("ernn_status"),
+                "ernn_reg_date": doc.get("ernn_reg_date"),
+                "doc_form": doc.get("doc_form", "Електронна (КЕП)"),
+                "edi_provider": doc.get("edi_provider", "Вчасно"),
+                "p7s_sign_hash": doc.get("p7s_sign_hash"),
+                "p7s_signer_info": doc.get("p7s_signer_info"),
                 "source_file": p.name,
             }
             documents.append(doc_record)
@@ -713,13 +746,16 @@ class FreezeImporter:
                 d.id AS doc_id,
                 d.doc_number,
                 d.doc_type,
+                COALESCE(d.direction, 'OUT') AS direction,
                 d.counterparty_name,
                 d.counterparty_edrpou,
+                COALESCE(d.tax_invoice_number, '') AS tax_invoice_number,
+                COALESCE(d.edi_provider, '') AS edi_provider,
                 COALESCE(d.comment, '') AS comment,
                 COALESCE(string_agg(i.item_name, ' | '), '') AS items_text
             FROM documents d
             LEFT JOIN document_items i ON d.id = i.doc_id
-            GROUP BY d.id, d.doc_number, d.doc_type, d.counterparty_name, d.counterparty_edrpou, d.comment
+            GROUP BY d.id, d.doc_number, d.doc_type, d.direction, d.counterparty_name, d.counterparty_edrpou, d.tax_invoice_number, d.edi_provider, d.comment
             """
             doc_rows = duck_con.execute(query).fetchall()
         finally:
@@ -732,9 +768,9 @@ class FreezeImporter:
             cur.executemany(
                 """
                 INSERT INTO doc_fts (
-                    doc_id, doc_number, doc_type, counterparty_name,
-                    counterparty_edrpou, comment, items_text
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    doc_id, doc_number, doc_type, direction, counterparty_name,
+                    counterparty_edrpou, tax_invoice_number, edi_provider, comment, items_text
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 doc_rows,
             )

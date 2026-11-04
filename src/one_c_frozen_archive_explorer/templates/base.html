@@ -27,7 +27,18 @@
           </div>
         </a>
 
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap;">
+          <!-- Enterprise Role Switcher -->
+          <form id="roleForm" method="GET" action="/api/auth/role" style="margin: 0;">
+            <input type="hidden" name="redirect_to" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+            <select name="role" class="role-select" onchange="this.form.submit()" title="Рольовий профіль доступу (Рівні безпеки)">
+              <option value="chief_accountant" {% if current_role and current_role.id == 'chief_accountant' %}selected{% endif %}>👑 Головний бухгалтер (Повний доступ)</option>
+              <option value="accountant_tov" {% if current_role and current_role.id == 'accountant_tov' %}selected{% endif %}>🏢 Бухгалтер ТОВ "Ареонікс Діджитал"</option>
+              <option value="accountant_fop" {% if current_role and current_role.id == 'accountant_fop' %}selected{% endif %}>👤 Бухгалтер ФОП "Ареонікс-Сервіс"</option>
+              <option value="auditor_dps" {% if current_role and current_role.id == 'auditor_dps' %}selected{% endif %}>🔍 Аудитор / ДПС (Read-only)</option>
+            </select>
+          </form>
+
           <span class="badge badge-airgap" title="Працює локально без підключення до Інтернету">
             <span style="display:inline-block; width:6px; height:6px; background:#10b981; border-radius:50%;"></span>
             Air-Gapped / Offline
@@ -277,7 +288,7 @@
           </div>
         </div>
 
-        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 6px; padding: 0.85rem 1rem; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between;">
+        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 6px; padding: 0.85rem 1rem; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
           <div style="color: #6ee7b7; font-weight: 600; font-size: 0.875rem;" id="wormStatus">
             ✅ Цілісність підтверджена (SHA-256 Bit-Level Verified)
           </div>
@@ -286,12 +297,26 @@
           </button>
         </div>
 
+        <!-- Cold Backup Disaster Recovery Action -->
+        <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid #334155; border-radius: 6px; padding: 0.85rem 1rem; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+          <div>
+            <div style="font-weight: 600; color: #fff; font-size: 0.85rem;">📦 Аварійний архів відновлення (Cold Storage Disaster Recovery)</div>
+            <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">Містить повні дампи DuckDB, FTS5 індекс, криптоманіфест та регламент розгортання.</div>
+          </div>
+          {% if current_role and current_role.read_only %}
+            <span style="font-size: 0.75rem; color: #ef4444; font-weight: 500;">🔒 Режим ДПС (Read-only): завантаження заборонено</span>
+          {% else %}
+            <a href="/api/backup/download" class="btn btn-success btn-sm" style="font-weight: 600; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35);">
+              💾 Завантажити Cold Backup (.zip)
+            </a>
+          {% endif %}
+        </div>
+
         <div style="font-size: 0.775rem; color: #94a3b8; line-height: 1.45; border-top: 1px solid #334155; padding-top: 0.85rem;">
-          <strong>Технічний контроль цілісності:</strong> Протокол фіксує бітову незмінність файлу сховища DuckDB та згенерованих Parquet-снапшотів за алгоритмом SHA-256. Використовується для інвентаризації, контролю контрольних сум під час аудитів та виявлення пошкоджень носіїв інформації.
+          <strong>Технічний контроль цілісності:</strong> Протокол фіксує бітову незмінність файлу сховища DuckDB та згенерованих Parquet-снапшотів за алгоритмом SHA-256. Використовується для інвентаризації, контролю контрольних сум під час аудитів та виявлення пошкоджень носіїв інформації (п. 44.3 ст. 44 ПКУ).
         </div>
       </div>
     </div>
   </div>
-  </script>
 </body>
 </html>

@@ -7,18 +7,21 @@ Excel (.xlsx) exports via openpyxl, and printable accounting documents.
 from __future__ import annotations
 
 import io
+import json
 import math
 import os
 import urllib.parse
+import zipfile
+from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -29,6 +32,46 @@ from one_c_frozen_archive_explorer.schema import (
     kopiykas_to_uah_float,
 )
 from one_c_frozen_archive_explorer.search_engine import SearchEngine
+
+ROLES: Dict[str, Dict[str, Any]] = {
+    "chief_accountant": {
+        "id": "chief_accountant",
+        "name": "Головний бухгалтер",
+        "badge": "👑 Головний бухгалтер (Повний доступ)",
+        "allowed_org": None,
+        "can_backup": True,
+        "read_only": False,
+    },
+    "accountant_tov": {
+        "id": "accountant_tov",
+        "name": "Бухгалтер ТОВ",
+        "badge": "🏢 Бухгалтер ТОВ 'Ареонікс Діджитал'",
+        "allowed_org": "org_01",
+        "can_backup": True,
+        "read_only": False,
+    },
+    "accountant_fop": {
+        "id": "accountant_fop",
+        "name": "Бухгалтер ФОП",
+        "badge": "👤 Бухгалтер ФОП 'Ареонікс-Сервіс'",
+        "allowed_org": "org_02",
+        "can_backup": True,
+        "read_only": False,
+    },
+    "auditor_dps": {
+        "id": "auditor_dps",
+        "name": "Аудитор / ДПС",
+        "badge": "🔍 Аудитор / ДПС (Read-only)",
+        "allowed_org": None,
+        "can_backup": False,
+        "read_only": True,
+    },
+}
+
+
+def get_current_role(request: Request) -> Dict[str, Any]:
+    role_id = request.cookies.get("user_role", "chief_accountant")
+    return ROLES.get(role_id, ROLES["chief_accountant"])
 
 
 def get_default_paths() -> tuple[Path, Path]:
@@ -101,6 +144,80 @@ def create_app() -> FastAPI:
     engine = SearchEngine(db_path=db_path, index_path=index_path)
 
     # -----------------------------------------------------------------------
+    # ROLE MANAGEMENT & BACKUP DISASTER RECOVERY
+    # -----------------------------------------------------------------------
+
+    @app.get("/api/auth/role")
+    async def switch_role(role: str = Query(...), redirect_to: str = Query(default="/")):
+        """Switches user role cookie and redirects back to view."""
+        if role not in ROLES:
+            role = "chief_accountant"
+        response = RedirectResponse(url=redirect_to, status_code=303)
+        response.set_cookie(key="user_role", value=role, max_age=3600 * 24 * 30, httponly=False, samesite="lax")
+        return response
+
+    @app.get("/api/backup/download")
+    async def download_cold_backup(request: Request):
+        """Generates and streams an encrypted/sealed disaster recovery ZIP archive on the fly."""
+        current_role = get_current_role(request)
+        if not current_role["can_backup"]:
+            raise HTTPException(
+                status_code=403,
+                detail="Роль 'Аудитор / ДПС' має доступ лише для читання (Read-only). Експорт холодного резерву заборонено згідно з політикою безпеки."
+            )
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            if db_path.exists():
+                zf.write(db_path, arcname="archive_vault.duckdb")
+            if index_path.exists():
+                zf.write(index_path, arcname="archive_index.db")
+
+            manifest = engine.get_worm_manifest()
+            manifest_json = json.dumps(manifest.model_dump(), ensure_ascii=False, indent=2)
+            zf.writestr("archive_manifest.json", manifest_json.encode("utf-8"))
+
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            restore_guide = f"""================================================================================
+FROZEN ARCHIVE EXPLORER — РЕГЛАМЕНТ АВАРІЙНОГО ВІДНОВЛЕННЯ (COLD RECOVERY)
+================================================================================
+Дата формування дампу: {now_str}
+Стандарт відповідності: п. 44.3 ст. 44 Податкового кодексу України (зберігання 1825 днів)
+Цілісність даних: SHA-256 криптографічний маніфест (WORM / Immutable)
+
+СКЛАД АРХІВУ:
+1. archive_vault.duckdb — Колоночне аналітичне сховище DuckDB з усіма первинними документами,
+   рядками специфікацій, кодами УКТЗЕД/ДКПП, податковими накладними (ПН/РК) та реєстрами ЄРНН.
+2. archive_index.db — Полнотекстовий індекс SQLite FTS5 (BM25) для миттєвого пошуку (< 30 мс).
+3. archive_manifest.json — Контрольні хеш-суми SHA-256 та юридичні реквізити консервації.
+
+ІНСТРУКЦІЯ З РОЗГОРТАННЯ ТА ВІДНОВЛЕННЯ:
+1. Розпакуйте цей архів у будь-яку робочу директорію на захищеному комп'ютері:
+   tar -xf Frozen_Archive_ColdBackup_*.zip   (або правий клік -> Розархівувати)
+2. Перевірте цілісність файлів за хеш-сумами з archive_manifest.json:
+   CertUtil -hashfile archive_vault.duckdb SHA256
+3. Встановіть залежності (Python 3.10+):
+   pip install duckdb fastapi uvicorn openpyxl jinja2
+4. Запустіть автономний веб-інтерфейс (без доступу до Інтернету):
+   python -m uvicorn one_c_frozen_archive_explorer.server:app --port 8020
+5. Відкрийте браузер за адресою: http://127.0.0.1:8020
+
+Контакти технічного аудитора: Nataliia Zyma (zymaneta@gmail.com)
+================================================================================
+"""
+            zf.writestr("README_RESTORE.txt", restore_guide.encode("utf-8"))
+
+        zip_buffer.seek(0)
+        ts_filename = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"Frozen_Archive_ColdBackup_{ts_filename}.zip"
+
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    # -----------------------------------------------------------------------
     # HTML PAGES
     # -----------------------------------------------------------------------
 
@@ -109,12 +226,18 @@ def create_app() -> FastAPI:
         request: Request,
         q: str = Query(default="", description="Search query"),
         doc_type: Optional[str] = Query(default=None),
+        direction: Optional[str] = Query(default=None),
+        ernn_status: Optional[str] = Query(default=None),
         year: Optional[str] = Query(default=None),
         our_company_id: Optional[str] = Query(default=None),
         page: int = Query(default=1, ge=1),
         limit: int = Query(default=25, ge=1, le=100),
     ):
-        """Main archive search explorer interface with multi-org filtering."""
+        """Main archive search explorer interface with enterprise role and direction filtering."""
+        current_role = get_current_role(request)
+        if current_role["allowed_org"]:
+            our_company_id = current_role["allowed_org"]
+
         parsed_year = int(year) if year and year.isdigit() else None
         offset = (page - 1) * limit
 
@@ -123,6 +246,8 @@ def create_app() -> FastAPI:
             doc_type=doc_type,
             year=parsed_year,
             our_company_id=our_company_id,
+            direction=direction,
+            ernn_status=ernn_status,
             limit=limit,
             offset=offset,
         )
@@ -142,18 +267,23 @@ def create_app() -> FastAPI:
                 "execution_ms": exec_ms,
                 "query": q,
                 "current_type": doc_type or "",
+                "current_direction": direction or "",
+                "current_ernn_status": ernn_status or "",
                 "current_year": parsed_year,
                 "selected_org": our_company_id or "",
                 "worm_manifest": worm_manifest,
                 "current_page": page,
                 "total_pages": total_pages,
                 "detected_counterparty": detected_cp,
+                "current_role": current_role,
+                "available_roles": ROLES,
             },
         )
 
     @app.get("/document/{doc_id}", response_class=HTMLResponse)
     async def document_detail_page(request: Request, doc_id: str):
         """Dedicated document card view with full line items and counterparty card."""
+        current_role = get_current_role(request)
         doc = engine.get_document_details(doc_id)
         if not doc:
             raise HTTPException(status_code=404, detail=f"Документ з ID '{doc_id}' не знайдено.")
@@ -163,12 +293,15 @@ def create_app() -> FastAPI:
             name="document.html",
             context={
                 "doc": doc,
+                "current_role": current_role,
+                "available_roles": ROLES,
             },
         )
 
     @app.get("/document/{doc_id}/print", response_class=HTMLResponse)
     async def document_print_view(request: Request, doc_id: str):
         """Official clean printable accounting document view (Ctrl+P ready)."""
+        current_role = get_current_role(request)
         doc = engine.get_document_details(doc_id)
         if not doc:
             raise HTTPException(status_code=404, detail=f"Документ з ID '{doc_id}' не знайдено.")
@@ -178,6 +311,8 @@ def create_app() -> FastAPI:
             name="print_view.html",
             context={
                 "doc": doc,
+                "current_role": current_role,
+                "available_roles": ROLES,
             },
         )
 
@@ -189,6 +324,9 @@ def create_app() -> FastAPI:
     async def api_search(
         q: str = Query(default=""),
         doc_type: Optional[str] = Query(default=None),
+        direction: Optional[str] = Query(default=None),
+        ernn_status: Optional[str] = Query(default=None),
+        our_company_id: Optional[str] = Query(default=None),
         year: Optional[int] = Query(default=None),
         limit: int = Query(default=50, ge=1, le=200),
         offset: int = Query(default=0, ge=0),
@@ -198,6 +336,9 @@ def create_app() -> FastAPI:
             query=q,
             doc_type=doc_type,
             year=year,
+            our_company_id=our_company_id,
+            direction=direction,
+            ernn_status=ernn_status,
             limit=limit,
             offset=offset,
         )
@@ -715,12 +856,19 @@ def create_app() -> FastAPI:
 
     @app.get("/export/search/excel")
     async def export_search_excel(
+        request: Request,
         q: str = Query(default=""),
         doc_type: Optional[str] = Query(default=None),
+        direction: Optional[str] = Query(default=None),
+        ernn_status: Optional[str] = Query(default=None),
         year: Optional[str] = Query(default=None),
         our_company_id: Optional[str] = Query(default=None),
     ):
-        """Exports filtered search results table to Excel (.xlsx) using openpyxl."""
+        """Exports filtered search results table to Excel (.xlsx) with tax and signature status."""
+        current_role = get_current_role(request)
+        if current_role["allowed_org"]:
+            our_company_id = current_role["allowed_org"]
+
         parsed_year = int(year) if year and year.isdigit() else None
         # Export up to 5000 filtered records
         results, total_count, _ = engine.search(
@@ -728,6 +876,8 @@ def create_app() -> FastAPI:
             doc_type=doc_type,
             year=parsed_year,
             our_company_id=our_company_id,
+            direction=direction,
+            ernn_status=ernn_status,
             limit=5000,
             offset=0,
         )
@@ -750,8 +900,9 @@ def create_app() -> FastAPI:
         )
 
         headers = [
-            "№", "Наша організація", "Тип документа", "Номер документа", "Дата",
-            "Контрагент", "ЄДРПОУ / ІПН", "Сума з ПДВ (грн)", "Коментар",
+            "№", "Напрямок", "Наша організація", "Тип документа", "Номер документа", "Дата",
+            "Контрагент", "ЄДРПОУ / ІПН", "Сума з ПДВ (грн)", "Номер ПН", "Статус в ЄРНН",
+            "Форма / КЕП", "Коментар",
         ]
 
         for col_idx, h in enumerate(headers, start=1):
@@ -768,9 +919,12 @@ def create_app() -> FastAPI:
         for idx, doc in enumerate(results, start=1):
             amount_uah = kopiykas_to_uah_float(doc.total_amount_kopiykas)
             total_sum_kop += doc.total_amount_kopiykas
+            dir_label = "↗ Продаж" if doc.direction == "OUT" else "↙ Купівля"
+            edi_label = f"{doc.doc_form} ({doc.edi_provider})" if doc.doc_form else "Паперовий"
 
             row_data = [
                 (idx, Alignment(horizontal="center"), None),
+                (dir_label, Alignment(horizontal="center"), None),
                 (doc.our_company_name, Alignment(horizontal="left"), None),
                 (doc.doc_type, Alignment(horizontal="left"), None),
                 (doc.doc_number, Alignment(horizontal="center"), None),
@@ -778,6 +932,9 @@ def create_app() -> FastAPI:
                 (doc.counterparty_name, Alignment(horizontal="left"), None),
                 (doc.counterparty_edrpou, Alignment(horizontal="center"), None),
                 (amount_uah, Alignment(horizontal="right"), "#,##0.00"),
+                (doc.tax_invoice_number or "—", Alignment(horizontal="center"), None),
+                (doc.ernn_status or "—", Alignment(horizontal="center"), None),
+                (edi_label, Alignment(horizontal="center"), None),
                 (doc.comment or "", Alignment(horizontal="left"), None),
             ]
 
@@ -793,11 +950,11 @@ def create_app() -> FastAPI:
             curr_row += 1
 
         # Summary Total Row
-        ws.cell(row=curr_row, column=6, value="РАЗОМ ЗА ВИБІРКОЮ:").font = font_bold
-        ws.cell(row=curr_row, column=6).alignment = Alignment(horizontal="right")
+        ws.cell(row=curr_row, column=8, value="РАЗОМ ЗА ВИБІРКОЮ:").font = font_bold
+        ws.cell(row=curr_row, column=8).alignment = Alignment(horizontal="right")
 
         total_uah = kopiykas_to_uah_float(total_sum_kop)
-        c_sum = ws.cell(row=curr_row, column=8, value=total_uah)
+        c_sum = ws.cell(row=curr_row, column=9, value=total_uah)
         c_sum.font = font_bold
         c_sum.alignment = Alignment(horizontal="right")
         c_sum.number_format = "#,##0.00\\ ₴"

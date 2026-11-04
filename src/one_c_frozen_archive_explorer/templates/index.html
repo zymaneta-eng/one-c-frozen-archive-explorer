@@ -9,13 +9,16 @@
   <div class="stat-card">
     <div class="stat-label">Документів в архіві</div>
     <div class="stat-value tabular-nums">{{ stats.total_documents }}</div>
-    <div class="stat-meta">РН, Акти, Рахунки</div>
+    <div class="stat-meta">РН, Акти, Рахунки, ПІ, Вхідні</div>
   </div>
 
   <div class="stat-card">
     <div class="stat-label">Загальний оборот (₴)</div>
     <div class="stat-value tabular-nums" style="color: #34d399;">{{ stats.formatted_total }}</div>
-    <div class="stat-meta">Точний підрахунок в копійках (BIGINT)</div>
+    <div class="stat-meta" style="font-size: 0.75rem;">
+      <span style="color: #93c5fd;">↗ Пр: {{ stats.formatted_sales }}</span> &bull; 
+      <span style="color: #fcd34d;">↙ Куп: {{ stats.formatted_purchases }}</span>
+    </div>
   </div>
 
   <div class="stat-card">
@@ -25,9 +28,11 @@
   </div>
 
   <div class="stat-card">
-    <div class="stat-label">Сховище & Індекс</div>
-    <div class="stat-value" style="font-size: 1.25rem; color: #60a5fa;">DuckDB + Parquet</div>
-    <div class="stat-meta">SQLite FTS5 BM25 (&lt; 50ms)</div>
+    <div class="stat-label">Податковий & Е-контур</div>
+    <div class="stat-value tabular-nums" style="font-size: 1.25rem; color: #60a5fa;">{{ stats.total_ernn_registered_count }} ЄРНН</div>
+    <div class="stat-meta" style="font-size: 0.75rem;">
+      <span style="color: #34d399;">🔑 КЕП: {{ stats.total_electronic_count }}</span> &bull; DuckDB + SQLite FTS5
+    </div>
   </div>
 </div>
 
@@ -35,7 +40,7 @@
 <div class="search-card">
   <form id="searchForm" method="GET" action="/" class="search-form">
     <!-- Instant Text Search Input -->
-    <div class="search-input-wrapper">
+    <div class="search-input-wrapper" style="min-width: 260px; flex: 2;">
       <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
       </svg>
@@ -45,12 +50,19 @@
         name="q" 
         value="{{ query }}" 
         class="search-input" 
-        placeholder="Пошук за назвою контрагента, ЄДРПОУ, номером документа або послугою..." 
+        placeholder="Пошук: назва контрагента, ЄДРПОУ, номер РН/ПН, послуга..." 
         autocomplete="off"
       >
       <!-- Autocomplete Dropdown List -->
       <div id="autocompleteList" class="autocomplete-dropdown"></div>
     </div>
+
+    <!-- Direction Filter (Sales vs Purchases) -->
+    <select name="direction" id="directionSelect" class="filter-select" onchange="this.form.submit()">
+      <option value="" {% if not current_direction %}selected{% endif %}>Всі напрямки</option>
+      <option value="OUT" {% if current_direction == 'OUT' %}selected{% endif %}>↗ Продаж (Реалізація)</option>
+      <option value="IN" {% if current_direction == 'IN' %}selected{% endif %}>↙ Купівля (Витрати)</option>
+    </select>
 
     <!-- Multi-Organization Filter -->
     <select name="our_company_id" id="orgSelect" class="filter-select" onchange="this.form.submit()">
@@ -68,6 +80,13 @@
       {% endfor %}
     </select>
 
+    <!-- ERNN Filter -->
+    <select name="ernn_status" id="ernnSelect" class="filter-select" onchange="this.form.submit()">
+      <option value="" {% if not current_ernn_status %}selected{% endif %}>Всі статуси ЄРНН</option>
+      <option value="Зареєстровано в ЄРНН" {% if current_ernn_status == 'Зареєстровано в ЄРНН' %}selected{% endif %}>✓ Зареєстровано в ЄРНН</option>
+      <option value="Не зареєстровано" {% if current_ernn_status == 'Не зареєстровано' %}selected{% endif %}>⚠ Не зареєстровано</option>
+    </select>
+
     <!-- Year Filter -->
     <select name="year" id="yearSelect" class="filter-select" onchange="this.form.submit()">
       <option value="" {% if not current_year %}selected{% endif %}>Всі роки</option>
@@ -82,7 +101,7 @@
     </button>
 
     <!-- Reset Button -->
-    {% if query or current_type or current_year or selected_org %}
+    {% if query or current_type or current_direction or current_ernn_status or current_year or selected_org %}
       <a href="/" class="btn btn-outline" title="Скинути всі фільтри">
         Скинути
       </a>
@@ -90,7 +109,7 @@
 
     <!-- Excel Export Button for current filter/search -->
     <a 
-      href="/export/search/excel?q={{ query | urlencode }}&doc_type={{ current_type | urlencode }}&year={{ current_year or '' }}&our_company_id={{ selected_org or '' }}" 
+      href="/export/search/excel?q={{ query | urlencode }}&doc_type={{ current_type | urlencode }}&direction={{ current_direction or '' }}&ernn_status={{ current_ernn_status | urlencode }}&year={{ current_year or '' }}&our_company_id={{ selected_org or '' }}" 
       class="btn btn-success" 
       title="Експортувати поточну відфільтровану вибірку в Excel"
     >
@@ -110,6 +129,11 @@
         {% if query %}
           <span>для запиту <span style="color:#60a5fa; font-weight:600; background: rgba(59,130,246,0.15); padding: 0.15rem 0.5rem; border-radius: 4px;">"{{ query }}"</span></span>
         {% endif %}
+        {% if current_direction %}
+          <span class="badge {% if current_direction == 'IN' %}badge-direction-in{% else %}badge-direction-out{% endif %}">
+            {% if current_direction == 'IN' %}↙ Тільки купівля{% else %}↗ Тільки продаж{% endif %}
+          </span>
+        {% endif %}
         {% if detected_counterparty %}
           <span style="display: inline-flex; align-items: center; gap: 0.35rem; color: #93c5fd; font-size: 0.85rem; background: rgba(30,58,138,0.4); padding: 0.2rem 0.6rem; border-radius: 4px; border: 1px solid rgba(59,130,246,0.3);">
             🏢 <strong>{{ detected_counterparty.name }}</strong> (ЄДРПОУ/ІПН: {{ detected_counterparty.edrpou }})
@@ -119,7 +143,7 @@
 
       <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: var(--text-muted);">
         <span style="display:inline-block; width:6px; height:6px; background:#10b981; border-radius:50%;"></span>
-        Час запиту: <strong style="color: #34d399;">{{ execution_ms }} ms</strong> (FTS5 BM25)
+        Час запиту: <strong style="color: #34d399;">{{ execution_ms }} ms</strong> (DuckDB + FTS5 BM25)
       </div>
     </div>
 
@@ -133,7 +157,11 @@
         {% endif %}
 
         <a href="/reports/dps-registry?q={{ query | urlencode }}&our_company_id={{ selected_org or '' }}&year={{ current_year or '' }}&doc_type={{ current_type or '' }}" target="_blank" class="btn btn-outline btn-sm" style="border-color: #60a5fa; color: #93c5fd; font-weight: 500;" title="Зведений реєстр-опис первинних документів (ст. 9 ЗУ «Про бухгалтерський облік»)">
-          📋 Зведений реєстр (Друк/PDF)
+          📋 Зведений реєстр ДПС (Друк/PDF)
+        </a>
+
+        <a href="/export/search/excel?q={{ query | urlencode }}&doc_type={{ current_type | urlencode }}&direction={{ current_direction or '' }}&ernn_status={{ current_ernn_status | urlencode }}&year={{ current_year or '' }}&our_company_id={{ selected_org or '' }}" class="btn btn-success btn-sm" style="font-weight: 500;" title="Експорт поточної таблиці у форматі Excel">
+          📊 Експорт в Excel (.xlsx)
         </a>
       </div>
 
@@ -141,7 +169,7 @@
         {% if detected_counterparty %}
           Режим контрагента: доступні зведені акти та податковий опис
         {% else %}
-          Звітність за відфільтрованою вибіркою первинних документів
+          Звітність за відфільтрованою вибіркою первинних документів (п. 44.3 ст. 44 ПКУ)
         {% endif %}
       </div>
     </div>
@@ -152,71 +180,107 @@
     <table class="archive-table">
       <thead>
         <tr>
-          <th style="width: 105px; min-width: 95px;">Тип</th>
-          <th style="width: 80px; text-align: center; white-space: nowrap;">Номер</th>
-          <th style="width: 80px; text-align: center; white-space: nowrap;">Дата</th>
-          <th style="width: 130px; min-width: 120px;">Наша організація</th>
-          <th style="min-width: 140px;">Контрагент / Одержувач</th>
-          <th style="width: 90px; text-align: center; white-space: nowrap;">ЄДРПОУ / ІПН</th>
-          <th style="width: 110px; text-align: right; white-space: nowrap;">Сума з ПДВ</th>
-          <th style="min-width: 110px; max-width: 170px;">Коментар / Фрагмент</th>
-          <th style="width: 105px; text-align: center; white-space: nowrap;">Дії</th>
+          <th style="width: 14%;">Напрямок / Тип</th>
+          <th style="width: 12%;">Документ</th>
+          <th style="width: 14%;">Наша організація</th>
+          <th style="width: 21%;">Контрагент / Одержувач</th>
+          <th style="width: 15%;">ПДВ / ЄРНН & КЕП</th>
+          <th style="width: 13%; text-align: right;">Сума з ПДВ</th>
+          <th style="width: 11%; text-align: center;">Дії</th>
         </tr>
       </thead>
       <tbody>
         {% if results %}
           {% for doc in results %}
             <tr>
+              <!-- Direction & Doc Type -->
               <td>
-                <span class="badge {% if 'Видаткова' in doc.doc_type %}badge-doc-rn{% elif 'Акт' in doc.doc_type %}badge-doc-akt{% elif 'Платіж' in doc.doc_type or 'Банк' in doc.doc_type %}badge-doc-pay{% else %}badge-doc-sf{% endif %}" style="font-size: 0.68rem; padding: 0.15rem 0.4rem; white-space: nowrap;">
+                <div>
+                  {% if doc.direction == 'IN' %}
+                    <span class="badge badge-direction-in" title="Вхідний первинний документ (Купівля / Витрати підприємства)">
+                      ↙ Купівля
+                    </span>
+                  {% else %}
+                    <span class="badge badge-direction-out" title="Вихідний первинний документ (Реалізація / Дохід підприємства)">
+                      ↗ Продаж
+                    </span>
+                  {% endif %}
+                </div>
+                <div class="cell-sub" title="{{ doc.doc_type }}">
                   {{ doc.doc_type }}
-                </span>
+                </div>
               </td>
-              <td style="text-align: center; white-space: nowrap;">
-                <a href="javascript:void(0)" onclick="openModal('{{ doc.doc_id }}')" style="color: #60a5fa; font-weight: 600; text-decoration: underline; text-underline-offset: 3px;">
-                  {{ doc.doc_number }}
-                </a>
-              </td>
-              <td style="text-align: center; color: #9ca3af; font-family: monospace; white-space: nowrap; font-variant-numeric: tabular-nums;">
-                {{ doc.doc_date | format_date_ua }}
-              </td>
+
+              <!-- Number & Date -->
               <td>
-                <span style="font-size: 0.72rem; color: #e2e8f0; background: rgba(30, 41, 59, 0.85); border: 1px solid #334155; padding: 0.15rem 0.45rem; border-radius: 4px; display: inline-block; white-space: nowrap; font-weight: 500;">
+                <div>
+                  <a href="javascript:void(0)" onclick="openModal('{{ doc.doc_id }}')" class="doc-num-link" title="Відкрити картку документа {{ doc.doc_number }}">
+                    {{ doc.doc_number }}
+                  </a>
+                </div>
+                <div class="cell-sub" style="font-family: monospace;">
+                  {{ doc.doc_date | format_date_ua }}
+                </div>
+              </td>
+
+              <!-- Our Company -->
+              <td>
+                <div class="org-chip" title="{{ doc.our_company_name }}">
                   {{ doc.our_company_name }}
-                </span>
+                </div>
               </td>
+
+              <!-- Counterparty & EDRPOU -->
               <td>
-                <div style="font-weight: 500; min-width: 130px; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ doc.counterparty_name }}">
-                  <a href="/?q={{ doc.counterparty_edrpou }}&our_company_id={{ selected_org or '' }}" style="color: #fff; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Фільтрувати та відкрити звіти для {{ doc.counterparty_name }}">
+                <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ doc.counterparty_name }}">
+                  <a href="/?q={{ doc.counterparty_edrpou }}&our_company_id={{ selected_org or '' }}" class="cp-name-link" title="Фільтрувати за {{ doc.counterparty_name }}">
                     {{ doc.counterparty_name }}
                   </a>
                 </div>
+                <div class="cell-sub" style="font-family: monospace;">
+                  ЄДРПОУ: {{ doc.counterparty_edrpou }}
+                </div>
               </td>
-              <td style="text-align: center; white-space: nowrap;">
-                <a href="/?q={{ doc.counterparty_edrpou }}&our_company_id={{ selected_org or '' }}" style="text-decoration: none;" title="Фільтрувати за кодом {{ doc.counterparty_edrpou }}">
-                  <span style="font-family: var(--font-mono); color: #94a3b8; font-size: 0.8rem; font-variant-numeric: tabular-nums;">
-                    {{ doc.counterparty_edrpou }}
-                  </span>
-                </a>
+
+              <!-- Tax Invoice / ERNN & KEP -->
+              <td>
+                <div>
+                  {% if doc.tax_invoice_number %}
+                    <span class="badge {% if 'Зареєстр' in (doc.ernn_status or '') %}badge-ernn-ok{% else %}badge-ernn-warn{% endif %}" title="{{ doc.ernn_status or 'Податкова накладна' }}">
+                      ПН-{{ doc.tax_invoice_number }} {% if 'Зареєстр' in (doc.ernn_status or '') %}✓{% endif %}
+                    </span>
+                  {% else %}
+                    <span class="cell-sub" style="color: #64748b;">Без ПН / ПДВ 0%</span>
+                  {% endif %}
+                </div>
+                <div class="cell-sub">
+                  {% if 'Електрон' in (doc.doc_form or '') %}
+                    <span style="color: #93c5fd;" title="Цифровий підпис КЕП (.p7s перевірено)">🔑 {{ doc.edi_provider or 'КЕП' }}</span>
+                  {% else %}
+                    <span style="color: #94a3b8;" title="Паперовий оригінал з підписом">📄 Паперовий</span>
+                  {% endif %}
+                </div>
               </td>
-              <td class="amount-col" style="white-space: nowrap; text-align: right;">
-                {{ doc.total_amount_kopiykas | format_money_html | safe }}
-              </td>
-              <td style="font-size: 0.75rem; color: #9ca3af; min-width: 110px; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ doc.comment or '' }}">
-                {% if doc.snippet %}
-                  {{ doc.snippet | safe }}
-                {% elif doc.comment %}
-                  {{ doc.comment }}
-                {% else %}
-                  <span style="color: #4b5563;">—</span>
+
+              <!-- Amount -->
+              <td class="amount-col" style="text-align: right;">
+                <div>
+                  {{ doc.total_amount_kopiykas | format_money_html | safe }}
+                </div>
+                {% if doc.comment %}
+                  <div class="cell-sub" style="text-align: right;" title="{{ doc.comment }}">
+                    {% if doc.snippet %}{{ doc.snippet | safe }}{% else %}{{ doc.comment }}{% endif %}
+                  </div>
                 {% endif %}
               </td>
-              <td style="text-align: center; white-space: nowrap;">
+
+              <!-- Actions -->
+              <td style="text-align: center;">
                 <div style="display: inline-flex; gap: 0.25rem; align-items: center; justify-content: center; white-space: nowrap;">
-                  <button type="button" onclick="openModal('{{ doc.doc_id }}')" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.45rem; font-size: 0.72rem;" title="Швидкий перегляд картки документа">
+                  <button type="button" onclick="openModal('{{ doc.doc_id }}')" class="btn btn-secondary btn-sm" style="padding: 0.2rem 0.45rem; font-size: 0.72rem;" title="Швидкий перегляд картки документа">
                     👁 Картка
                   </button>
-                  <a href="/document/{{ doc.doc_id }}/print" target="_blank" class="btn btn-outline btn-sm" style="padding: 0.25rem 0.45rem; font-size: 0.72rem;" title="Друк первинного документа А4 (Ctrl+P)">
+                  <a href="/document/{{ doc.doc_id }}/print" target="_blank" class="btn btn-outline btn-sm" style="padding: 0.2rem 0.45rem; font-size: 0.72rem;" title="Друк первинного документа А4 (Ctrl+P)">
                     🖨 Друк
                   </a>
                 </div>
@@ -225,7 +289,7 @@
           {% endfor %}
         {% else %}
           <tr>
-            <td colspan="9" style="text-align: center; padding: 3rem; color: var(--text-muted);">
+            <td colspan="7" style="text-align: center; padding: 3rem; color: var(--text-muted);">
               За вашим запитом документів не знайдено. Спробуйте змінити фільтри або пошукове слово.
             </td>
           </tr>
@@ -238,18 +302,16 @@
   {% if total_pages > 1 %}
     <div class="pagination">
       <div style="font-size: 0.85rem; color: var(--text-secondary);">
-        Сторінка <strong style="color: #fff;">{{ current_page }}</strong> з {{ total_pages }}
+        Сторінка <strong style="color:#fff;">{{ current_page }}</strong> з <strong style="color:#fff;">{{ total_pages }}</strong>
       </div>
-
       <div style="display: flex; gap: 0.5rem;">
         {% if current_page > 1 %}
-          <a href="/?q={{ query | urlencode }}&doc_type={{ current_type | urlencode }}&year={{ current_year or '' }}&page={{ current_page - 1 }}" class="btn btn-secondary btn-sm">
+          <a href="/?q={{ query | urlencode }}&doc_type={{ current_type | urlencode }}&direction={{ current_direction or '' }}&ernn_status={{ current_ernn_status | urlencode }}&year={{ current_year or '' }}&our_company_id={{ selected_org or '' }}&page={{ current_page - 1 }}" class="btn btn-outline btn-sm">
             &larr; Попередня
           </a>
         {% endif %}
-
         {% if current_page < total_pages %}
-          <a href="/?q={{ query | urlencode }}&doc_type={{ current_type | urlencode }}&year={{ current_year or '' }}&page={{ current_page + 1 }}" class="btn btn-secondary btn-sm">
+          <a href="/?q={{ query | urlencode }}&doc_type={{ current_type | urlencode }}&direction={{ current_direction or '' }}&ernn_status={{ current_ernn_status | urlencode }}&year={{ current_year or '' }}&our_company_id={{ selected_org or '' }}&page={{ current_page + 1 }}" class="btn btn-outline btn-sm">
             Наступна &rarr;
           </a>
         {% endif %}
@@ -258,58 +320,60 @@
   {% endif %}
 </div>
 
-<!-- Autocomplete & Instant Search Logic -->
+<!-- Autocomplete Client Script -->
 <script>
-  const searchInput = document.getElementById('searchInput');
-  const dropdown = document.getElementById('autocompleteList');
-  let debounceTimeout = null;
+  (function() {
+    const input = document.getElementById('searchInput');
+    const dropdown = document.getElementById('autocompleteList');
+    let timer = null;
 
-  searchInput.addEventListener('input', function() {
-    clearTimeout(debounceTimeout);
-    const val = this.value.trim();
+    if (!input || !dropdown) return;
 
-    if (val.length < 2) {
-      dropdown.style.display = 'none';
-      return;
-    }
-
-    debounceTimeout = setTimeout(() => {
-      fetch('/api/suggest?q=' + encodeURIComponent(val))
-        .then(r => r.json())
-        .then(items => {
-          if (!items || items.length === 0) {
-            dropdown.style.display = 'none';
-            return;
-          }
-          dropdown.innerHTML = '';
-          items.forEach(it => {
-            const row = document.createElement('div');
-            row.className = 'autocomplete-item';
-            row.innerHTML = `
-              <span>${it.text}</span>
-              <span class="badge ${it.type === 'Контрагент' ? 'badge-airgap' : 'badge-zerotoken'}">${it.type}</span>
-            `;
-            row.addEventListener('click', () => {
-              searchInput.value = it.value;
+    input.addEventListener('input', function() {
+      clearTimeout(timer);
+      const val = this.value.trim();
+      if (val.length < 2) {
+        dropdown.style.display = 'none';
+        return;
+      }
+      timer = setTimeout(() => {
+        fetch('/api/suggest?q=' + encodeURIComponent(val))
+          .then(res => res.json())
+          .then(items => {
+            if (!items || items.length === 0) {
               dropdown.style.display = 'none';
-              document.getElementById('searchForm').submit();
+              return;
+            }
+            let html = '';
+            items.forEach(it => {
+              html += `
+                <div class="autocomplete-item" onclick="selectSuggestion('${it.name.replace(/'/g, "\\'")}', '${it.edrpou}')">
+                  <div style="font-weight: 600; color: #fff;">${it.name}</div>
+                  <div style="font-size: 0.75rem; color: #94a3b8;">ЄДРПОУ: ${it.edrpou}</div>
+                </div>
+              `;
             });
-            dropdown.appendChild(row);
+            dropdown.innerHTML = html;
+            dropdown.style.display = 'block';
+          })
+          .catch(() => {
+            dropdown.style.display = 'none';
           });
-          dropdown.style.display = 'block';
-        })
-        .catch(() => {
-          dropdown.style.display = 'none';
-        });
-    }, 180);
-  });
+      }, 150);
+    });
 
-  // Close dropdown on click outside
-  document.addEventListener('click', function(e) {
-    if (!dropdown.contains(e.target) && e.target !== searchInput) {
+    window.selectSuggestion = function(name, edrpou) {
+      input.value = edrpou || name;
       dropdown.style.display = 'none';
-    }
-  });
+      document.getElementById('searchForm').submit();
+    };
+
+    document.addEventListener('click', function(e) {
+      if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.style.display = 'none';
+      }
+    });
+  })();
 </script>
 
 {% endblock %}

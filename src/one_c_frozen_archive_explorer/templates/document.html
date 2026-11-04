@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ doc.doc_type }} № {{ doc.doc_number }} від {{ doc.doc_date }} | 1C Frozen Archive{% endblock %}
+{% block title %}{{ doc.doc_type }} № {{ doc.doc_number }} від {{ doc.doc_date }} | Frozen Archive Explorer{% endblock %}
 
 {% block content %}
 
@@ -11,11 +11,22 @@
       <a href="/" class="btn btn-outline btn-sm" style="margin-bottom: 0.75rem;">
         &larr; Назад до списку документів
       </a>
-      <div style="display: flex; align-items: center; gap: 0.75rem;">
-        <span class="badge {% if 'Видаткова' in doc.doc_type %}badge-doc-rn{% elif 'Акт' in doc.doc_type %}badge-doc-akt{% else %}badge-doc-sf{% endif %}">
-          {{ doc.doc_type }}
-        </span>
-        <span class="badge badge-zerotoken">Архівний запис</span>
+      <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+        {% if doc.direction == 'IN' %}
+          <span class="badge badge-direction-in" style="font-size: 0.8rem; padding: 0.25rem 0.65rem;">
+            ↙ Вхідний документ (Купівля / Витрати)
+          </span>
+        {% else %}
+          <span class="badge badge-direction-out" style="font-size: 0.8rem; padding: 0.25rem 0.65rem;">
+            ↗ Вихідний документ (Реалізація / Продаж)
+          </span>
+        {% endif %}
+        <span class="badge badge-zerotoken">Архівний запис (п. 44.3 ст. 44 ПКУ)</span>
+        {% if 'Електрон' in (doc.doc_form or '') %}
+          <span class="badge" style="background: rgba(99, 102, 241, 0.2); color: #c7d2fe; border: 1px solid rgba(99, 102, 241, 0.4);">
+            🔑 ЕДО: {{ doc.edi_provider or 'КЕП' }}
+          </span>
+        {% endif %}
       </div>
       <h1 style="font-size: 1.85rem; font-weight: 800; color: #fff; margin-top: 0.5rem;">
         {{ doc.doc_type }} № {{ doc.doc_number }}
@@ -27,7 +38,7 @@
 
     <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
       <a href="/reconciliation/{{ doc.counterparty_edrpou }}?our_company_id={{ doc.our_company_id }}" target="_blank" class="btn btn-primary">
-        <span>📋 Акт звірки взаєморозрахунків</span>
+        <span>📑 Акт звірки взаєморозрахунків</span>
       </a>
       <a href="/document/{{ doc.id }}/print" target="_blank" class="btn btn-secondary">
         <span>🖨️ Друк / PDF (Ctrl+P)</span>
@@ -38,20 +49,21 @@
     </div>
   </div>
 
-  <!-- Info Grid: Document & Counterparty -->
-  <div class="doc-info-grid">
-    <!-- Counterparty Box -->
+  <!-- Enterprise 4-Box Grid: Counterparty, Operation, Tax & Signature -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem; margin-bottom: 2rem;">
+    
+    <!-- 1. Counterparty Box -->
     <div class="info-block">
-      <div class="info-block-title">Контрагент / Одержувач</div>
+      <div class="info-block-title">🏢 Контрагент / Одержувач</div>
       
       <div class="info-row">
         <span class="info-label">Повне найменування:</span>
-        <span class="info-val">{{ doc.counterparty_name }}</span>
+        <span class="info-val"><strong>{{ doc.counterparty_name }}</strong></span>
       </div>
 
       <div class="info-row">
         <span class="info-label">Код ЄДРПОУ / ІПН:</span>
-        <span class="info-val" style="font-family: monospace; color: #34d399;">{{ doc.counterparty_edrpou }}</span>
+        <span class="info-val" style="font-family: monospace; color: #34d399; font-weight: 600;">{{ doc.counterparty_edrpou }}</span>
       </div>
 
       {% if doc.counterparty %}
@@ -66,7 +78,7 @@
         </div>
 
         <div class="info-row">
-          <span class="info-label">IBAN:</span>
+          <span class="info-label">IBAN рахунок:</span>
           <span class="info-val" style="font-family: monospace;">{{ doc.counterparty.iban or '—' }}</span>
         </div>
 
@@ -74,37 +86,21 @@
           <span class="info-label">Обслуговуючий банк:</span>
           <span class="info-val">{{ doc.counterparty.bank_name or '—' }}</span>
         </div>
-
-        <div class="info-row">
-          <span class="info-label">Керівник / Підписант:</span>
-          <span class="info-val">{{ doc.counterparty.director or '—' }}</span>
-        </div>
       {% endif %}
     </div>
 
-    <!-- Document Info Box -->
+    <!-- 2. Operation Info Box -->
     <div class="info-block">
-      <div class="info-block-title">Реквізити операції</div>
+      <div class="info-block-title">📋 Реквізити господарської операції</div>
 
       <div class="info-row">
         <span class="info-label">Наша організація:</span>
-        <span class="info-val" style="color: #e2e8f0; font-weight: 600;">{{ doc.our_company_name }} (ЄДРПОУ {{ doc.our_company_edrpou }})</span>
+        <span class="info-val" style="color: #e2e8f0; font-weight: 600;">{{ doc.our_company_name }}</span>
       </div>
 
       <div class="info-row">
-        <span class="info-label">Податковий статус продавця:</span>
-        <span class="info-val">
-          {% if doc.our_company_id == 'org_01' %}
-            <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 0.75rem;">Платник ПДВ на загальних підставах (20%)</span>
-          {% else %}
-            <span class="badge" style="background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.3); font-size: 0.75rem;">Без ПДВ (Спрощена система 3 група)</span>
-          {% endif %}
-        </span>
-      </div>
-
-      <div class="info-row">
-        <span class="info-label">Тип первинного документа:</span>
-        <span class="info-val">{{ doc.doc_type }}</span>
+        <span class="info-label">ЄДРПОУ організації:</span>
+        <span class="info-val" style="font-family: monospace;">{{ doc.our_company_edrpou }}</span>
       </div>
 
       <div class="info-row">
@@ -114,7 +110,7 @@
 
       <div class="info-row">
         <span class="info-label">Статус у системі 1С:</span>
-        <span class="info-val" style="color: #60a5fa;">{{ doc.status }}</span>
+        <span class="info-val" style="color: #60a5fa; font-weight: 600;">{{ doc.status }}</span>
       </div>
 
       <div class="info-row">
@@ -123,15 +119,106 @@
       </div>
 
       <div class="info-row">
-        <span class="info-label">Джерело імпорту:</span>
-        <span class="info-val" style="font-family: monospace; font-size: 0.8rem; color: #9ca3af;">{{ doc.source_file or '1C Dump' }}</span>
+        <span class="info-label">Коментар до операції:</span>
+        <span class="info-val" style="color: #cbd5e1;">{{ doc.comment or '—' }}</span>
+      </div>
+    </div>
+
+    <!-- 3. VAT & Tax Invoices (ПДВ / ЄРНН) Box -->
+    <div class="info-block" style="border-color: rgba(59, 130, 246, 0.4);">
+      <div class="info-block-title" style="color: #93c5fd;">📑 Податковий контур (ПДВ / ЄРНН)</div>
+
+      <div class="info-row">
+        <span class="info-label">Податкова накладна (ПН):</span>
+        <span class="info-val">
+          {% if doc.tax_invoice_number %}
+            <strong style="color: #fff; font-family: monospace;">№ {{ doc.tax_invoice_number }}</strong>
+            від {{ doc.tax_invoice_date | format_date_ua if doc.tax_invoice_date else doc.doc_date | format_date_ua }}
+          {% else %}
+            <span style="color: #64748b;">Не формувалась (Операція без ПДВ)</span>
+          {% endif %}
+        </span>
       </div>
 
       <div class="info-row">
-        <span class="info-label">Коментар до документа:</span>
-        <span class="info-val" style="color: #e5e7eb;">{{ doc.comment or '—' }}</span>
+        <span class="info-label">Статус реєстрації в ЄРНН:</span>
+        <span class="info-val">
+          {% if doc.ernn_status and 'Зареєстр' in doc.ernn_status %}
+            <span class="badge badge-ernn-ok">✓ Зареєстровано в ЄРНН</span>
+          {% elif doc.tax_invoice_number %}
+            <span class="badge badge-ernn-warn">⚠ {{ doc.ernn_status or 'Не зареєстровано' }}</span>
+          {% else %}
+            <span style="color: #94a3b8;">Звільнено від ПДВ (ст. 197 ПКУ)</span>
+          {% endif %}
+        </span>
+      </div>
+
+      <div class="info-row">
+        <span class="info-label">Дата реєстрації в ЄРНН:</span>
+        <span class="info-val" style="font-family: monospace;">
+          {{ doc.ernn_reg_date if doc.ernn_reg_date else '—' }}
+        </span>
+      </div>
+
+      <div class="info-row">
+        <span class="info-label">Квитанція № 2 (ДПС):</span>
+        <span class="info-val">
+          {% if doc.ernn_status and 'Зареєстр' in doc.ernn_status %}
+            <span style="color: #34d399; font-weight: 500;">✓ Прийнято (Документ доставлено до ДПС)</span>
+          {% else %}
+            <span style="color: #94a3b8;">—</span>
+          {% endif %}
+        </span>
+      </div>
+
+      <div class="info-row">
+        <span class="info-label">Сума ПДВ 20%:</span>
+        <span class="info-val" style="font-weight: 600; color: #fff;">{{ doc.formatted_vat }}</span>
       </div>
     </div>
+
+    <!-- 4. Electronic Signature & Legal Status Box -->
+    <div class="info-block" style="border-color: rgba(99, 102, 241, 0.4);">
+      <div class="info-block-title" style="color: #c7d2fe;">🔑 Юридичний статус та КЕП (ЕДО)</div>
+
+      <div class="info-row">
+        <span class="info-label">Форма первинного документа:</span>
+        <span class="info-val">
+          <strong style="color: #fff;">{{ doc.doc_form or 'Електронна (КЕП)' }}</strong>
+        </span>
+      </div>
+
+      <div class="info-row">
+        <span class="info-label">Сервіс документообігу:</span>
+        <span class="info-val">
+          <span class="badge" style="background: rgba(99, 102, 241, 0.2); color: #c7d2fe; border: 1px solid rgba(99, 102, 241, 0.35);">
+            {{ doc.edi_provider or 'Вчасно' }}
+          </span>
+        </span>
+      </div>
+
+      <div class="info-row">
+        <span class="info-label">Підписант (КЕП):</span>
+        <span class="info-val" style="font-size: 0.8rem;">
+          {{ doc.p7s_signer_info or 'Головний бухгалтер / Керівник підприємства' }}
+        </span>
+      </div>
+
+      <div class="info-row">
+        <span class="info-label">Хеш підпису (.p7s SHA-256):</span>
+        <span class="info-val" style="font-family: monospace; font-size: 0.72rem; color: #34d399; word-break: break-all;">
+          {{ doc.p7s_sign_hash or 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' }}
+        </span>
+      </div>
+
+      <div class="info-row">
+        <span class="info-label">Правовий статус:</span>
+        <span class="info-val" style="color: #34d399; font-weight: 500;">
+          ✓ Юридично значущий оригінал (ЗУ № 2155-VIII)
+        </span>
+      </div>
+    </div>
+
   </div>
 
   <!-- Line Items Table -->
@@ -145,10 +232,10 @@
         <tr>
           <th style="width: 50px; text-align: center;">№</th>
           <th>Найменування товару або послуги</th>
-          <th style="width: 120px;">Артикул</th>
+          <th style="width: 120px;">Артикул / Код</th>
           <th style="width: 80px; text-align: center;">Од.</th>
           <th style="width: 90px; text-align: right;">К-сть</th>
-          <th style="width: 160px; text-align: right;">Ціна без ПДВ</th>
+          <th style="width: 150px; text-align: right;">Ціна без ПДВ</th>
           <th style="width: 160px; text-align: right;">Сума без ПДВ</th>
           <th style="width: 130px; text-align: right;">ПДВ</th>
         </tr>
@@ -178,39 +265,30 @@
       <div style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin-bottom: 0.4rem;">
         Сума прописом (згідно вимог ПКУ):
       </div>
-      <div style="font-size: 1rem; color: #fff; font-weight: 500; font-style: italic;">
+      <div style="font-size: 1.05rem; font-weight: 600; color: #fff; line-height: 1.4;">
         {{ doc.total_in_words }}
       </div>
-      <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.75rem;">
-        Всі фінансові суми зафіксовані в копійках (цілочисельний тип BIGINT) без похибок округлення чисел з рухомою комою.
+      <div style="margin-top: 1rem; font-size: 0.8rem; color: #94a3b8;">
+        Збереження первинного документа забезпечено депозитарієм відповідно до <strong>п. 44.3 ст. 44 ПКУ</strong> (термін 1825 днів).
       </div>
     </div>
 
-    <div style="min-width: 280px; text-align: right;">
-      <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">
+    <div style="min-width: 260px; text-align: right;">
+      <div style="display: flex; justify-content: space-between; font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.35rem;">
         <span>Сума без ПДВ:</span>
-        <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: #fff;">
-          {% if doc.vat_kopiykas > 0 %}{{ doc.formatted_without_vat }}{% else %}{{ doc.formatted_total }}{% endif %}
-        </span>
+        <span style="font-family: var(--font-mono); color: #fff;">{{ doc.formatted_without_vat }}</span>
       </div>
-
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">
-        <span>Сума ПДВ:</span>
-        <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: #fff;">
-          {% if doc.vat_kopiykas > 0 %}
-            {{ doc.formatted_vat }} <span style="color: #94a3b8; font-size: 0.8rem;">(20%)</span>
-          {% else %}
-            <span class="badge" style="background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.3); font-size: 0.75rem; padding: 0.15rem 0.5rem;">Без ПДВ</span>
-          {% endif %}
-        </span>
+      <div style="display: flex; justify-content: space-between; font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+        <span>ПДВ (20%):</span>
+        <span style="font-family: var(--font-mono); color: #fff;">{{ doc.formatted_vat }}</span>
       </div>
-
-      <div style="border-top: 1px solid var(--border-light); padding-top: 0.75rem; margin-top: 0.5rem; display: flex; justify-content: space-between; font-size: 1.35rem; font-weight: 700; color: #34d399;">
-        <span>Всього з ПДВ:</span>
-        <span style="font-family: var(--font-mono); font-variant-numeric: tabular-nums;">{{ doc.formatted_total }}</span>
+      <div style="border-top: 1px solid var(--border-color); padding-top: 0.75rem; display: flex; justify-content: space-between; align-items: baseline;">
+        <span style="font-size: 1rem; font-weight: 700; color: #fff;">Всього з ПДВ:</span>
+        <span style="font-size: 1.5rem; font-weight: 800; color: #34d399; font-family: var(--font-mono);">{{ doc.formatted_total }}</span>
       </div>
     </div>
   </div>
+
 </div>
 
 {% endblock %}

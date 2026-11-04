@@ -210,6 +210,21 @@
       <strong>Сума прописом:</strong> <em>{{ doc.total_in_words }}</em>
     </div>
 
+    <!-- Electronic Signature / Legal Archival Stamp -->
+    <div style="margin-top: 20px; border: 1px dashed #64748b; padding: 8px 12px; font-size: 8pt; background: #f8fafc; border-radius: 4px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px;">
+        <div>
+          <strong>ЮРИДИЧНИЙ СТАТУС ТА ЕДО (КЕП):</strong> {{ doc.doc_form or 'Електронна (КЕП)' }} &bull; Сервіс: {{ doc.edi_provider or 'Вчасно' }}
+          {% if doc.tax_invoice_number %}
+            &bull; <strong>ПН:</strong> № {{ doc.tax_invoice_number }} ({{ doc.ernn_status or 'Зареєстровано в ЄРНН' }})
+          {% endif %}
+        </div>
+        <div style="font-family: monospace; color: #475569;">
+          .p7s SHA-256: {{ (doc.p7s_sign_hash or doc.id)[:24] }}...
+        </div>
+      </div>
+    </div>
+
     <!-- Official Signatures Block -->
     <div class="signatures-block">
       <div class="sig-col">

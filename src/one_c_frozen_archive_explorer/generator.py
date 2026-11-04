@@ -7,6 +7,7 @@ with line items in CSV and JSON formats, then executes ETL import into DuckDB an
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import logging
 import random
@@ -203,7 +204,15 @@ def generate_documents_and_items(
     end_date = date(2025, 12, 20)
     day_span = (end_date - start_date).days
 
-    doc_counters = {"РН-": 1, "АКТ-": 1, "СФ-": 1, "ПІ-": 1}
+    doc_counters = {
+        "РН-": 1,
+        "АКТ-": 1,
+        "СФ-": 1,
+        "ПІ-": 1,
+        "ПНк-": 1,
+        "АктВх-": 1,
+        "ПІв-": 1,
+    }
 
     for i in range(1, doc_count + 1):
         if i <= len(counterparties):
@@ -213,16 +222,27 @@ def generate_documents_and_items(
         rnd_days = random.randint(0, day_span)
         doc_date = start_date + timedelta(days=rnd_days)
 
-        # Pick document type weighted: RN (38%), AKT (27%), Payment Instruction (25%), Proforma Invoice (10%)
-        r_type = random.random()
-        if r_type < 0.38:
-            doc_type, prefix = "Видаткова накладна", "РН-"
-        elif r_type < 0.65:
-            doc_type, prefix = "Акт виконаних робіт", "АКТ-"
-        elif r_type < 0.90:
-            doc_type, prefix = "Платіжна інструкція", "ПІ-"
+        # 58% Sales (OUT, Доходи/Продажі), 42% Purchases (IN, Витрати/Постачальники)
+        if random.random() < 0.58:
+            direction = "OUT"
+            r_type = random.random()
+            if r_type < 0.44:
+                doc_type, prefix = "Видаткова накладна", "РН-"
+            elif r_type < 0.74:
+                doc_type, prefix = "Акт виконаних робіт", "АКТ-"
+            elif r_type < 0.90:
+                doc_type, prefix = "Платіжна інструкція", "ПІ-"
+            else:
+                doc_type, prefix = "Рахунок на оплату", "СФ-"
         else:
-            doc_type, prefix = "Рахунок на оплату", "СФ-"
+            direction = "IN"
+            r_type = random.random()
+            if r_type < 0.50:
+                doc_type, prefix = "Прибуткова накладна", "ПНк-"
+            elif r_type < 0.82:
+                doc_type, prefix = "Акт отриманих послуг", "АктВх-"
+            else:
+                doc_type, prefix = "Платіжна інструкція (вихідна)", "ПІв-"
 
         num = doc_counters[prefix]
         doc_counters[prefix] += 1
@@ -247,9 +267,8 @@ def generate_documents_and_items(
         doc_total_kopiykas = 0
         doc_vat_kopiykas = 0
 
-        if doc_type == "Платіжна інструкція":
-            # Bank Payment Instruction (Поступление на расчетный счет / Оплата покупця)
-            # Forms CREDIT in Reconciliation Act, paying off debt from shipments
+        if doc_type in ["Платіжна інструкція", "Платіжна інструкція (вихідна)"]:
+            # Bank Payment Instructions (Поступление от покупателя / Оплата поставщику)
             pay_amt_kop = (random.randint(1500000, 22000000) // 100) * 100  # 15k - 220k UAH
             if is_vat_payer:
                 base_kop = int(round(pay_amt_kop * 5 / 6))
@@ -261,11 +280,16 @@ def generate_documents_and_items(
             doc_vat_kopiykas = vat_kop
 
             item_id = f"item_{i:05d}_1"
+            is_incoming_pay = (doc_type == "Платіжна інструкція")
             items.append({
                 "id": item_id,
                 "doc_id": doc_id,
                 "line_num": 1,
-                "item_name": f"Оплата за товари та послуги згідно договору № {contract_num}",
+                "item_name": (
+                    f"Оплата за товари та послуги згідно договору № {contract_num}"
+                    if is_incoming_pay else
+                    f"Оплата постачальнику за матеріали та послуги згідно договору № {contract_num}"
+                ),
                 "sku": None,
                 "unit": "платіж",
                 "quantity": 1.0,
@@ -273,14 +297,18 @@ def generate_documents_and_items(
                 "amount_kopiykas": pay_amt_kop,
                 "vat_kopiykas": vat_kop,
             })
-            comment_text = f"Оплата за безготівковим розрахунком зг. {contract_str}. Банківська виписка проведена."
+            comment_text = (
+                f"Оплата за безготівковим розрахунком від покупця зг. {contract_str}. Банківська виписка проведена."
+                if is_incoming_pay else
+                f"Перерахування коштів постачальнику зг. {contract_str}. Банківська виписка проведена."
+            )
         else:
             # 1 to 3 line items for SME goods / services invoices
             num_items = random.choices([1, 2, 3], weights=[0.70, 0.23, 0.07])[0]
-            # Filter items according to doc type: acts generally get services
-            if doc_type == "Акт виконаних робіт":
+            # Filter items according to doc type: acts get services, invoices get goods
+            if doc_type in ["Акт виконаних робіт", "Акт отриманих послуг"]:
                 eligible_items = [it for it in ITEMS_CATALOG if not it[4]]
-            elif doc_type == "Видаткова накладна":
+            elif doc_type in ["Видаткова накладна", "Прибуткова накладна"]:
                 eligible_items = [it for it in ITEMS_CATALOG if it[4]]
             else:
                 eligible_items = ITEMS_CATALOG
@@ -306,10 +334,9 @@ def generate_documents_and_items(
                 else:
                     qty = float(random.choice([1, 2, 3]))
 
-                unit_price_kop = (random.randint(p_min, p_max) // 100) * 100  # Rounded to exact whole hryvnia or 50 kop
+                unit_price_kop = (random.randint(p_min, p_max) // 100) * 100
                 amount_kop = int(round(unit_price_kop * qty))
 
-                # VAT: 20% if our company is VAT payer (TOV), 0 if FOP
                 if is_vat_payer:
                     base_kop = int(round(amount_kop * 5 / 6))
                     vat_kop = amount_kop - base_kop
@@ -334,21 +361,50 @@ def generate_documents_and_items(
                 })
 
             comments_pool = [
-                f"Оплата згідно {contract_str}",
-                "Повна оплата за поставлені матеріали",
-                "Акт звірки взаєморозрахунків підтверджено",
+                f"Розрахунки згідно {contract_str}",
                 "Поставка на склад у м. Дніпро згідно заявки",
-                "Термінова відвантаження за довіреністю № 41",
+                "Акт звірки взаєморозрахунків підтверджено",
+                "Отримання матеріалів на центральний склад за довіреністю",
+                "Термінова поставка згідно специфікації № 2",
                 "Передплата 100% за регламентне обслуговування",
                 None,
                 None,
             ]
             comment_text = random.choice(comments_pool)
 
+        # Tax Invoice (ПН / ЄРНН) metadata
+        tax_invoice_num = None
+        tax_invoice_dt = None
+        ernn_stat = "Без ПДВ"
+        ernn_dt = None
+
+        if is_vat_payer and doc_type in ["Видаткова накладна", "Акт виконаних робіт", "Прибуткова накладна", "Акт отриманих послуг"]:
+            tax_invoice_num = f"ПН-{i:05d}"
+            tax_invoice_dt = doc_date.isoformat()
+            if random.random() < 0.94:
+                ernn_stat = "Зареєстровано в ЄРНН"
+                ernn_dt = (doc_date + timedelta(days=random.randint(1, 4))).strftime("%d.%m.%Y 11:28") + " (Квитанція № 2)"
+            else:
+                ernn_stat = "Не зареєстровано"
+                ernn_dt = None
+
+        # Electronic Signature (КЕП / ЕДО) metadata
+        if random.random() < 0.80:
+            doc_form = "Електронна (КЕП)"
+            edi_provider = random.choice(["Вчасно", "M.E.Doc", "Сота"])
+            p7s_hash = hashlib.sha256(f"{doc_id}_{doc_number}_{doc_date}".encode()).hexdigest()
+            p7s_info = f"КЕП: {cp.get('director', 'Директор')}, {doc_date.strftime('%d.%m.%Y')} 14:{random.randint(10,59)} ({edi_provider} / КНЕДП ДПС)"
+        else:
+            doc_form = "Паперова (оригінал)"
+            edi_provider = "Паперовий архів"
+            p7s_hash = None
+            p7s_info = f"Паперовий оригінал з підписом та мокрою печаткою (Архівна папка № {doc_date.year}/{random.randint(1, 12):02d})"
+
         documents.append({
             "id": doc_id,
             "doc_number": doc_number,
             "doc_type": doc_type,
+            "direction": direction,
             "doc_date": doc_date.isoformat(),
             "our_company_id": our_org_id,
             "our_company_name": our_org_name,
@@ -363,6 +419,14 @@ def generate_documents_and_items(
             "contract_number": contract_num,
             "comment": comment_text,
             "year": doc_date.year,
+            "tax_invoice_number": tax_invoice_num,
+            "tax_invoice_date": tax_invoice_dt,
+            "ernn_status": ernn_stat,
+            "ernn_reg_date": ernn_dt,
+            "doc_form": doc_form,
+            "edi_provider": edi_provider,
+            "p7s_sign_hash": p7s_hash,
+            "p7s_signer_info": p7s_info,
             "source_file": "1c_historical_archive.xml",
         })
 

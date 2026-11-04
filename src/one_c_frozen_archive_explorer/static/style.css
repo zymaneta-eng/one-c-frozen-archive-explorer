@@ -397,7 +397,7 @@ header.app-header {
   border-collapse: collapse;
   text-align: left;
   font-size: 0.8rem;
-  table-layout: auto;
+  table-layout: fixed;
 }
 
 .archive-table th {
@@ -413,10 +413,12 @@ header.app-header {
 }
 
 .archive-table td {
-  padding: 0.5rem 0.45rem;
+  padding: 0.45rem 0.45rem;
   border-bottom: 1px solid rgba(55, 65, 81, 0.5);
   color: var(--text-primary);
   vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .archive-table tr:hover {
@@ -436,6 +438,128 @@ header.app-header {
   color: #94a3b8;
   font-weight: 400;
   font-size: 0.875em;
+}
+
+/* Direction Badges */
+.badge-direction-out {
+  background: rgba(59, 130, 246, 0.16);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  font-size: 0.68rem;
+  padding: 0.12rem 0.4rem;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.badge-direction-in {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  font-size: 0.68rem;
+  padding: 0.12rem 0.4rem;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+/* ERNN Badges */
+.badge-ernn-ok {
+  background: rgba(16, 185, 129, 0.16);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  font-size: 0.68rem;
+  padding: 0.12rem 0.4rem;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.badge-ernn-warn {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  font-size: 0.68rem;
+  padding: 0.12rem 0.4rem;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+/* Cell subtexts & Links */
+.cell-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-num-link {
+  color: #60a5fa;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-size: 0.82rem;
+}
+.doc-num-link:hover {
+  color: #93c5fd;
+}
+
+.org-chip {
+  font-size: 0.72rem;
+  color: #e2e8f0;
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid #334155;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  display: inline-block;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.cp-name-link {
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 0.82rem;
+}
+.cp-name-link:hover {
+  text-decoration: underline;
+  color: #60a5fa;
+}
+
+.role-select {
+  background: rgba(30, 41, 59, 0.95);
+  border: 1px solid rgba(99, 102, 241, 0.45);
+  color: #e0e7ff;
+  border-radius: 6px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.775rem;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.role-select:focus {
+  border-color: #818cf8;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
 }
 
 /* Search Query Highlight - Soft Corporate Blue */

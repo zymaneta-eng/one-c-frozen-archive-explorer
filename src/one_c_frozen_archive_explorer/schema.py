@@ -248,11 +248,12 @@ CREATE TABLE IF NOT EXISTS counterparties (
 CREATE INDEX IF NOT EXISTS idx_counterparty_edrpou ON counterparties (edrpou);
 CREATE INDEX IF NOT EXISTS idx_counterparty_name ON counterparties (name);
 
--- 1C Primary Accounting Documents (Видаткові накладні, Акти робіт, Рахунки)
+-- 1C Primary Accounting Documents (Продажі, Купівля, Банк, ПДВ/ЄРНН, КЕП)
 CREATE TABLE IF NOT EXISTS documents (
     id VARCHAR PRIMARY KEY,
     doc_number VARCHAR NOT NULL,
     doc_type VARCHAR NOT NULL,
+    direction VARCHAR DEFAULT 'OUT', -- 'OUT' (Реалізація / Продаж), 'IN' (Надходження / Купівля)
     doc_date DATE NOT NULL,
     our_company_id VARCHAR DEFAULT 'org_01',
     our_company_name VARCHAR DEFAULT 'ТОВ "Ареонікс Діджитал"',
@@ -267,6 +268,14 @@ CREATE TABLE IF NOT EXISTS documents (
     contract_number VARCHAR,
     comment VARCHAR,
     year INTEGER NOT NULL,
+    tax_invoice_number VARCHAR,
+    tax_invoice_date DATE,
+    ernn_status VARCHAR DEFAULT 'Без ПДВ', -- 'Зареєстровано в ЄРНН', 'Не зареєстровано', 'Без ПДВ'
+    ernn_reg_date VARCHAR,
+    doc_form VARCHAR DEFAULT 'Електронна (КЕП)', -- 'Електронна (КЕП)', 'Паперова (оригінал)'
+    edi_provider VARCHAR DEFAULT 'Вчасно', -- 'Вчасно', 'M.E.Doc', 'Сота', 'Паперовий архів'
+    p7s_sign_hash VARCHAR,
+    p7s_signer_info VARCHAR,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     source_file VARCHAR
 );
@@ -274,6 +283,9 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE INDEX IF NOT EXISTS idx_doc_number ON documents (doc_number);
 CREATE INDEX IF NOT EXISTS idx_doc_date ON documents (doc_date);
 CREATE INDEX IF NOT EXISTS idx_doc_type ON documents (doc_type);
+CREATE INDEX IF NOT EXISTS idx_doc_direction ON documents (direction);
+CREATE INDEX IF NOT EXISTS idx_doc_ernn ON documents (ernn_status);
+CREATE INDEX IF NOT EXISTS idx_doc_form ON documents (doc_form);
 CREATE INDEX IF NOT EXISTS idx_doc_year ON documents (year);
 CREATE INDEX IF NOT EXISTS idx_doc_counterparty ON documents (counterparty_id);
 CREATE INDEX IF NOT EXISTS idx_doc_our_company ON documents (our_company_id);
@@ -301,8 +313,11 @@ CREATE VIRTUAL TABLE IF NOT EXISTS doc_fts USING fts5(
     doc_id UNINDEXED,
     doc_number,
     doc_type,
+    direction,
     counterparty_name,
     counterparty_edrpou,
+    tax_invoice_number,
+    edi_provider,
     comment,
     items_text,
     tokenize = 'unicode61 remove_diacritics 2'
@@ -358,6 +373,7 @@ class DocumentHeaderModel(BaseModel):
     id: str
     doc_number: str
     doc_type: str
+    direction: str = "OUT"  # 'OUT' (Реалізація / Продаж), 'IN' (Надходження / Купівля)
     doc_date: str
     our_company_id: str = "org_01"
     our_company_name: str = 'ТОВ "Ареонікс Діджитал"'
@@ -372,6 +388,14 @@ class DocumentHeaderModel(BaseModel):
     contract_number: Optional[str] = None
     comment: Optional[str] = None
     year: int
+    tax_invoice_number: Optional[str] = None
+    tax_invoice_date: Optional[str] = None
+    ernn_status: Optional[str] = "Без ПДВ"  # 'Зареєстровано в ЄРНН', 'Не зареєстровано', 'Без ПДВ'
+    ernn_reg_date: Optional[str] = None
+    doc_form: Optional[str] = "Електронна (КЕП)"  # 'Електронна (КЕП)', 'Паперова (оригінал)'
+    edi_provider: Optional[str] = "Вчасно"  # 'Вчасно', 'M.E.Doc', 'Сота', 'Паперовий архів'
+    p7s_sign_hash: Optional[str] = None
+    p7s_signer_info: Optional[str] = None
     source_file: Optional[str] = None
 
     @computed_field
@@ -383,6 +407,11 @@ class DocumentHeaderModel(BaseModel):
     @property
     def formatted_vat(self) -> str:
         return format_kopiykas(self.vat_kopiykas)
+
+    @computed_field
+    @property
+    def is_incoming(self) -> bool:
+        return self.direction.upper() == "IN"
 
 
 class DocumentDetailModel(DocumentHeaderModel):
@@ -409,6 +438,7 @@ class SearchResultModel(BaseModel):
     doc_id: str
     doc_number: str
     doc_type: str
+    direction: str = "OUT"
     doc_date: str
     our_company_id: str = "org_01"
     our_company_name: str = 'ТОВ "Ареонікс Діджитал"'
@@ -418,6 +448,10 @@ class SearchResultModel(BaseModel):
     counterparty_edrpou: str
     total_amount_kopiykas: int
     formatted_total: str
+    tax_invoice_number: Optional[str] = None
+    ernn_status: Optional[str] = None
+    doc_form: Optional[str] = None
+    edi_provider: Optional[str] = None
     comment: Optional[str] = None
     snippet: Optional[str] = None
     rank: float = 0.0
@@ -426,6 +460,8 @@ class SearchResultModel(BaseModel):
 class SearchQueryModel(BaseModel):
     query: str = ""
     doc_type: Optional[str] = None
+    direction: Optional[str] = None  # 'OUT', 'IN'
+    ernn_status: Optional[str] = None
     year: Optional[int] = None
     our_company_id: Optional[str] = None
     limit: int = 50
@@ -438,10 +474,17 @@ class ArchiveStatsModel(BaseModel):
     total_items: int
     total_amount_kopiykas: int
     formatted_total: str
+    total_sales_kopiykas: int = 0
+    formatted_sales: str = "0,00 ₴"
+    total_purchases_kopiykas: int = 0
+    formatted_purchases: str = "0,00 ₴"
+    total_electronic_count: int = 0
+    total_ernn_registered_count: int = 0
     years: List[int]
     doc_types: List[str]
     our_companies: List[Dict[str, str]] = Field(default_factory=list)
     selected_org: Optional[str] = None
+    selected_direction: Optional[str] = None
     parquet_storage_path: Optional[str] = None
 
 

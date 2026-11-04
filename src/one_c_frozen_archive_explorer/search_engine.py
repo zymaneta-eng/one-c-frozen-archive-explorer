@@ -78,11 +78,13 @@ class SearchEngine:
         doc_type: Optional[str] = None,
         year: Optional[int] = None,
         our_company_id: Optional[str] = None,
+        direction: Optional[str] = None,
+        ernn_status: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
     ) -> Tuple[List[SearchResultModel], int, float]:
         """
-        Executes hybrid FTS + DuckDB search in sub-50ms with multi-organization filtering.
+        Executes hybrid FTS + DuckDB search in sub-50ms with multi-organization and direction filtering.
         Returns: (results, total_count, execution_time_ms)
         """
         t0 = time.perf_counter()
@@ -93,6 +95,8 @@ class SearchEngine:
 
         if our_company_id in ("Всі організації", "", "Всі наші організації", "all"):
             our_company_id = None
+
+        direction = direction.strip().upper() if direction and direction.strip().upper() in ["IN", "OUT"] else None
 
         if year in (0, "0", "", "Всі роки"):
             year = None
@@ -156,6 +160,12 @@ class SearchEngine:
                 if doc_type:
                     filter_clauses.append("doc_type = ?")
                     params.append(doc_type)
+                if direction:
+                    filter_clauses.append("direction = ?")
+                    params.append(direction)
+                if ernn_status and ernn_status != "all":
+                    filter_clauses.append("ernn_status = ?")
+                    params.append(ernn_status)
                 if year:
                     filter_clauses.append("year = ?")
                     params.append(year)
@@ -171,7 +181,8 @@ class SearchEngine:
                 SELECT 
                     id, doc_number, doc_type, strftime(doc_date, '%Y-%m-%d') AS doc_date,
                     counterparty_name, counterparty_edrpou, total_amount_kopiykas,
-                    comment, our_company_id, our_company_name, our_company_edrpou, counterparty_id
+                    comment, our_company_id, our_company_name, our_company_edrpou, counterparty_id,
+                    COALESCE(direction, 'OUT'), tax_invoice_number, ernn_status, doc_form, edi_provider
                 FROM documents
                 WHERE {where_sql}
                 """
@@ -196,6 +207,11 @@ class SearchEngine:
                     our_company_name=d[9] or 'ТОВ "Ареонікс Діджитал"',
                     our_company_edrpou=d[10] or "43981245",
                     counterparty_id=d[11],
+                    direction=d[12] or "OUT",
+                    tax_invoice_number=d[13],
+                    ernn_status=d[14],
+                    doc_form=d[15],
+                    edi_provider=d[16],
                 )
                 for d in docs
             }
@@ -217,6 +233,12 @@ class SearchEngine:
             if doc_type:
                 filter_clauses.append("doc_type = ?")
                 params.append(doc_type)
+            if direction:
+                filter_clauses.append("direction = ?")
+                params.append(direction)
+            if ernn_status and ernn_status != "all":
+                filter_clauses.append("ernn_status = ?")
+                params.append(ernn_status)
             if year:
                 filter_clauses.append("year = ?")
                 params.append(year)
@@ -233,7 +255,8 @@ class SearchEngine:
             SELECT 
                 id, doc_number, doc_type, strftime(doc_date, '%Y-%m-%d') AS doc_date,
                 counterparty_name, counterparty_edrpou, total_amount_kopiykas,
-                comment, our_company_id, our_company_name, our_company_edrpou, counterparty_id
+                comment, our_company_id, our_company_name, our_company_edrpou, counterparty_id,
+                COALESCE(direction, 'OUT'), tax_invoice_number, ernn_status, doc_form, edi_provider
             FROM documents
             WHERE {where_sql}
             ORDER BY doc_date DESC, id DESC
@@ -259,6 +282,11 @@ class SearchEngine:
                     our_company_name=r[9] or 'ТОВ "Ареонікс Діджитал"',
                     our_company_edrpou=r[10] or "43981245",
                     counterparty_id=r[11],
+                    direction=r[12] or "OUT",
+                    tax_invoice_number=r[13],
+                    ernn_status=r[14],
+                    doc_form=r[15],
+                    edi_provider=r[16],
                 )
                 for r in rows
             ]
@@ -319,7 +347,11 @@ class SearchEngine:
                 counterparty_id, counterparty_name, counterparty_edrpou,
                 total_amount_kopiykas, vat_kopiykas, currency, status,
                 contract_number, comment, year, source_file,
-                our_company_id, our_company_name, our_company_edrpou
+                our_company_id, our_company_name, our_company_edrpou,
+                COALESCE(direction, 'OUT') AS direction,
+                tax_invoice_number, strftime(tax_invoice_date, '%Y-%m-%d') AS tax_invoice_date,
+                ernn_status, ernn_reg_date, doc_form, edi_provider,
+                p7s_sign_hash, p7s_signer_info
             FROM documents
             WHERE id = ?
             """
@@ -346,6 +378,15 @@ class SearchEngine:
                 "our_company_id": d_row[15] or "org_01",
                 "our_company_name": d_row[16] or 'ТОВ "Ареонікс Діджитал"',
                 "our_company_edrpou": d_row[17] or "43981245",
+                "direction": d_row[18] or "OUT",
+                "tax_invoice_number": d_row[19],
+                "tax_invoice_date": str(d_row[20]) if d_row[20] else None,
+                "ernn_status": d_row[21],
+                "ernn_reg_date": d_row[22],
+                "doc_form": d_row[23] or "Електронна (КЕП)",
+                "edi_provider": d_row[24] or "Вчасно",
+                "p7s_sign_hash": d_row[25],
+                "p7s_signer_info": d_row[26],
             }
 
             cp_query = """
@@ -428,6 +469,15 @@ class SearchEngine:
             """
             items_count = duck_con.execute(item_count_query, params).fetchone()[0]
 
+            # Directional breakdown (Sales vs Purchases / Expenses)
+            prefix_clause = f"{where_sql} AND" if where_sql else "WHERE"
+            sales_kop = duck_con.execute(f"SELECT COALESCE(sum(total_amount_kopiykas), 0) FROM documents {prefix_clause} direction = 'OUT'", params).fetchone()[0]
+            purchases_kop = duck_con.execute(f"SELECT COALESCE(sum(total_amount_kopiykas), 0) FROM documents {prefix_clause} direction = 'IN'", params).fetchone()[0]
+
+            # Electronic (KEP) and ERNN registration stats
+            electronic_count = duck_con.execute(f"SELECT count(*) FROM documents {prefix_clause} doc_form LIKE '%Електрон%'", params).fetchone()[0]
+            ernn_count = duck_con.execute(f"SELECT count(*) FROM documents {prefix_clause} ernn_status LIKE '%Зареєстр%'", params).fetchone()[0]
+
             years_rows = duck_con.execute(f"SELECT DISTINCT year FROM documents {where_sql} ORDER BY year DESC", params).fetchall()
             years = [r[0] for r in years_rows if r[0] is not None]
 
@@ -452,6 +502,12 @@ class SearchEngine:
             total_items=items_count,
             total_amount_kopiykas=total_kop,
             formatted_total=format_kopiykas(total_kop),
+            total_sales_kopiykas=sales_kop,
+            formatted_sales=format_kopiykas(sales_kop),
+            total_purchases_kopiykas=purchases_kop,
+            formatted_purchases=format_kopiykas(purchases_kop),
+            total_electronic_count=electronic_count,
+            total_ernn_registered_count=ernn_count,
             years=years,
             doc_types=doc_types,
             our_companies=our_companies,
