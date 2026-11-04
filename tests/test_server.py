@@ -4,6 +4,7 @@ Tests FastAPI HTML pages, REST API (< 50ms), and openpyxl Excel exports.
 """
 
 import io
+import json
 from pathlib import Path
 import openpyxl
 import pytest
@@ -224,3 +225,80 @@ def test_export_reconciliation_excel(client: TestClient):
     assert "АКТ ЗВІРКИ" in ws["A1"].value
     assert ws["C6"].value == "Дебет (грн)"
     assert ws["D6"].value == "Кредит (грн)"
+
+
+def test_import_wizard_page(client: TestClient):
+    """Test GET /import returns HTML wizard page with proper badges."""
+    resp = client.get("/import")
+    assert resp.status_code == 200
+    assert "Майстер імпорту" in resp.text
+    assert "Крок 1:" in resp.text
+
+
+def test_import_preview_and_execute_endpoints(client: TestClient):
+    """Test pre-flight audit preview and execution of bundle import."""
+    # 1. Preview with sample demo bundle
+    resp_preview = client.post("/api/import/preview?use_sample=true")
+    assert resp_preview.status_code == 200
+    pdata = resp_preview.json()
+    assert pdata["success"] is True
+    assert pdata["stats"]["total_documents"] > 0
+    assert "sample_documents" in pdata
+    assert len(pdata["sample_documents"]) > 0
+
+    # 2. Preview with custom uploaded JSON
+    sample_payload = {
+        "documents": [
+            {
+                "id": "test_doc_web_01",
+                "doc_number": "РН-TEST-999",
+                "doc_type": "Видаткова накладна",
+                "doc_date": "2025-11-04",
+                "counterparty_name": "ТОВ \"Тест Постач\"",
+                "counterparty_edrpou": "12345678",
+                "total_amount_kopiykas": 1200000,
+                "vat_kopiykas": 200000,
+                "direction": "OUT",
+                "tax_invoice_number": "99901",
+                "ernn_status": "Зареєстровано в ЄРНН",
+                "doc_form": "Електронна (КЕП)",
+                "edi_provider": "Вчасно",
+                "items": [
+                    {
+                        "item_name": "Тестова послуга консервації",
+                        "unit": "послуга",
+                        "quantity": 1,
+                        "unit_price_kopiykas": 1000000,
+                        "amount_kopiykas": 1000000,
+                        "vat_kopiykas": 200000,
+                    }
+                ]
+            }
+        ]
+    }
+    json_bytes = json.dumps(sample_payload).encode("utf-8")
+    resp_upload_prev = client.post(
+        "/api/import/preview",
+        files={"file": ("custom_bundle.json", json_bytes, "application/json")}
+    )
+    assert resp_upload_prev.status_code == 200
+    up_data = resp_upload_prev.json()
+    assert up_data["stats"]["total_documents"] == 1
+    assert up_data["stats"]["sales_count"] == 1
+
+    # 3. Read-only role cannot execute import (403)
+    client.cookies.set("user_role", "auditor_dps")
+    resp_exec_forbidden = client.post("/api/import/execute?use_sample=true")
+    assert resp_exec_forbidden.status_code == 403
+
+    # 4. Chief accountant CAN execute import
+    client.cookies.set("user_role", "chief_accountant")
+    resp_exec = client.post(
+        "/api/import/execute",
+        files={"file": ("custom_bundle.json", json_bytes, "application/json")}
+    )
+    assert resp_exec.status_code == 200
+    exec_res = resp_exec.json()
+    assert exec_res["success"] is True
+    assert "manifest" in exec_res
+    assert len(exec_res["manifest"]["vault_sha256"]) == 64

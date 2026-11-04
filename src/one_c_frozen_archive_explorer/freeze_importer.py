@@ -491,14 +491,29 @@ class FreezeImporter:
                 if direction not in ["IN", "OUT"]:
                     direction = "IN" if any(k in doc_type.lower() for k in ["прибут", "отриман", "вхідн"]) else "OUT"
 
-                tax_invoice_num = str(r.get("tax_invoice_number", "")).strip() or None
-                tax_invoice_dt = str(r.get("tax_invoice_date", "")).strip() or None
-                ernn_stat = str(r.get("ernn_status", "")).strip() or ("Зареєстровано в ЄРНН" if vat_kop > 0 else "Без ПДВ")
-                ernn_dt = str(r.get("ernn_reg_date", "")).strip() or None
-                doc_form = str(r.get("doc_form", "Електронна (КЕП)")).strip()
-                edi_prov = str(r.get("edi_provider", "Вчасно")).strip()
-                p7s_hash = str(r.get("p7s_sign_hash", "")).strip() or None
-                p7s_info = str(r.get("p7s_signer_info", "")).strip() or None
+                raw_ti_num = r.get("tax_invoice_number")
+                tax_invoice_num = str(raw_ti_num).strip() if raw_ti_num is not None and str(raw_ti_num).strip() not in ["", "None"] else None
+
+                raw_ti_dt = r.get("tax_invoice_date")
+                tax_invoice_dt = str(raw_ti_dt).strip() if raw_ti_dt is not None and str(raw_ti_dt).strip() not in ["", "None"] else None
+
+                raw_ernn = r.get("ernn_status")
+                ernn_stat = str(raw_ernn).strip() if raw_ernn is not None and str(raw_ernn).strip() not in ["", "None"] else ("Зареєстровано в ЄРНН" if vat_kop > 0 else "Без ПДВ")
+
+                raw_ernn_dt = r.get("ernn_reg_date")
+                ernn_dt = str(raw_ernn_dt).strip() if raw_ernn_dt is not None and str(raw_ernn_dt).strip() not in ["", "None"] else None
+
+                raw_doc_form = r.get("doc_form")
+                doc_form = str(raw_doc_form).strip() if raw_doc_form is not None and str(raw_doc_form).strip() not in ["", "None"] else "Електронна (КЕП)"
+
+                raw_edi = r.get("edi_provider")
+                edi_prov = str(raw_edi).strip() if raw_edi is not None and str(raw_edi).strip() not in ["", "None"] else "Вчасно"
+
+                raw_p7s = r.get("p7s_sign_hash")
+                p7s_hash = str(raw_p7s).strip() if raw_p7s is not None and str(raw_p7s).strip() not in ["", "None"] else None
+
+                raw_info = r.get("p7s_signer_info")
+                p7s_info = str(raw_info).strip() if raw_info is not None and str(raw_info).strip() not in ["", "None"] else None
 
                 rows.append((
                     doc_id,

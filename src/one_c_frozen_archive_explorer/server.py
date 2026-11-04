@@ -10,6 +10,8 @@ import io
 import json
 import math
 import os
+import shutil
+import tempfile
 import urllib.parse
 import zipfile
 from datetime import datetime
@@ -20,11 +22,12 @@ import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from one_c_frozen_archive_explorer.freeze_importer import FreezeImporter
 from one_c_frozen_archive_explorer.schema import (
     ArchiveStatsModel,
     DocumentDetailModel,
@@ -316,9 +319,185 @@ FROZEN ARCHIVE EXPLORER — РЕГЛАМЕНТ АВАРІЙНОГО ВІДНОВ
             },
         )
 
+    @app.get("/import", response_class=HTMLResponse)
+    async def import_page(request: Request):
+        """Web wizard for importing and cryo-freezing 1C/BAS accounting archives."""
+        current_role = get_current_role(request)
+        stats = engine.get_archive_stats()
+        worm_manifest = engine.get_worm_manifest()
+
+        return templates.TemplateResponse(
+            request=request,
+            name="import.html",
+            context={
+                "current_role": current_role,
+                "available_roles": ROLES,
+                "stats": stats,
+                "worm_manifest": worm_manifest,
+            },
+        )
+
     # -----------------------------------------------------------------------
     # REST API ENDPOINTS (< 50ms responses)
     # -----------------------------------------------------------------------
+
+    def _parse_bundle_data(file_bytes: bytes, filename: str) -> Any:
+        """Parses raw bundle data from JSON or ZIP file."""
+        if filename.lower().endswith(".zip"):
+            with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
+                json_names = [n for n in z.namelist() if n.lower().endswith(".json")]
+                if not json_names:
+                    raise ValueError("У ZIP-архіві не знайдено JSON-файлу вивантаження.")
+                with z.open(json_names[0]) as jf:
+                    return json.loads(jf.read().decode("utf-8"))
+        else:
+            return json.loads(file_bytes.decode("utf-8"))
+
+    def _analyze_bundle(raw_data: Any) -> Dict[str, Any]:
+        """Calculates pre-flight audit metrics and previews from raw bundle data."""
+        if isinstance(raw_data, dict):
+            raw_docs = raw_data.get("documents", [])
+            raw_cps = raw_data.get("counterparties", [])
+        elif isinstance(raw_data, list):
+            raw_docs = raw_data
+            raw_cps = []
+        else:
+            raw_docs, raw_cps = [], []
+
+        total_docs = len(raw_docs)
+        if total_docs == 0:
+            raise ValueError("Пакет не містить записів первинних документів (список порожній).")
+
+        total_items = sum(len(d.get("items", [])) for d in raw_docs)
+        total_kop = sum(int(d.get("total_amount_kopiykas") or d.get("total_amount", 0)) for d in raw_docs)
+
+        sales_docs = [d for d in raw_docs if str(d.get("direction", "OUT")).upper() == "OUT"]
+        purchases_docs = [d for d in raw_docs if str(d.get("direction", "OUT")).upper() == "IN"]
+        sales_kop = sum(int(d.get("total_amount_kopiykas") or d.get("total_amount", 0)) for d in sales_docs)
+        purchases_kop = sum(int(d.get("total_amount_kopiykas") or d.get("total_amount", 0)) for d in purchases_docs)
+
+        ernn_count = sum(1 for d in raw_docs if "Зареєстр" in str(d.get("ernn_status", "")))
+        electronic_count = sum(1 for d in raw_docs if "Електрон" in str(d.get("doc_form", "")))
+
+        cp_set = {str(d.get("counterparty_edrpou") or d.get("counterparty_name")) for d in raw_docs if d.get("counterparty_edrpou") or d.get("counterparty_name")}
+        cp_set.update(str(c.get("edrpou") or c.get("name")) for c in raw_cps if c.get("edrpou") or c.get("name"))
+
+        sample_docs = []
+        for d in raw_docs[:5]:
+            amt_kop = int(d.get("total_amount_kopiykas") or d.get("total_amount", 0))
+            sample_docs.append({
+                "doc_number": d.get("doc_number"),
+                "doc_type": d.get("doc_type"),
+                "doc_date": d.get("doc_date"),
+                "counterparty_name": d.get("counterparty_name"),
+                "direction": d.get("direction", "OUT"),
+                "formatted_total": format_kopiykas(amt_kop),
+                "tax_invoice": d.get("tax_invoice_number"),
+                "edi_provider": d.get("edi_provider", "Вчасно"),
+            })
+
+        return {
+            "total_documents": total_docs,
+            "total_counterparties": len(cp_set),
+            "total_items": total_items,
+            "total_amount_kopiykas": total_kop,
+            "formatted_total": format_kopiykas(total_kop),
+            "sales_count": len(sales_docs),
+            "sales_kopiykas": sales_kop,
+            "formatted_sales": format_kopiykas(sales_kop),
+            "purchases_count": len(purchases_docs),
+            "purchases_kopiykas": purchases_kop,
+            "formatted_purchases": format_kopiykas(purchases_kop),
+            "ernn_count": ernn_count,
+            "electronic_count": electronic_count,
+            "sample_documents": sample_docs,
+            "is_valid": True,
+        }
+
+    @app.post("/api/import/preview")
+    async def api_import_preview(
+        request: Request,
+        file: Optional[UploadFile] = File(default=None),
+        use_sample: bool = Query(default=False),
+    ):
+        """Analyzes and validates uploaded 1C export bundle before cryo-freezing."""
+        base_dir = Path(__file__).resolve().parent.parent.parent
+        sample_path = base_dir / "data" / "frozen_archive_bundle.json"
+
+        filename = "frozen_archive_bundle.json"
+        try:
+            if use_sample:
+                if not sample_path.exists():
+                    raise HTTPException(status_code=404, detail="Файл зразка data/frozen_archive_bundle.json не знайдено.")
+                with open(sample_path, "r", encoding="utf-8") as f:
+                    raw_data = json.load(f)
+            elif file:
+                filename = file.filename or "uploaded_bundle.json"
+                content = await file.read()
+                raw_data = _parse_bundle_data(content, filename)
+            else:
+                raise HTTPException(status_code=400, detail="Файл не передано.")
+
+            stats = _analyze_bundle(raw_data)
+            return {
+                "success": True,
+                "filename": filename,
+                "stats": stats,
+                "sample_documents": stats["sample_documents"],
+            }
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Помилка аналізу вивантаження: {str(e)}")
+
+    @app.post("/api/import/execute")
+    async def api_import_execute(
+        request: Request,
+        file: Optional[UploadFile] = File(default=None),
+        use_sample: bool = Query(default=False),
+    ):
+        """Executes actual cryo-freezing import of the bundle into DuckDB, Parquet, and SQLite FTS5."""
+        current_role = get_current_role(request)
+        if current_role["read_only"]:
+            raise HTTPException(
+                status_code=403,
+                detail="Роль 'Аудитор / ДПС' має доступ лише для читання. Імпорт та опечатування заборонені."
+            )
+
+        base_dir = Path(__file__).resolve().parent.parent.parent
+        sample_path = base_dir / "data" / "frozen_archive_bundle.json"
+
+        temp_file = None
+        try:
+            if use_sample:
+                if not sample_path.exists():
+                    raise HTTPException(status_code=404, detail="Файл зразка data/frozen_archive_bundle.json не знайдено.")
+                bundle_path = sample_path
+            elif file:
+                content = await file.read()
+                raw_data = _parse_bundle_data(content, file.filename or "uploaded.json")
+                temp_file = tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False)
+                json.dump(raw_data, temp_file, ensure_ascii=False)
+                temp_file.close()
+                bundle_path = Path(temp_file.name)
+            else:
+                raise HTTPException(status_code=400, detail="Файл для імпорту не передано.")
+
+            importer = FreezeImporter(db_path=db_path, index_path=index_path)
+            result = importer.import_bundle_json(bundle_path)
+            new_manifest = importer.generate_worm_manifest()
+
+            return {
+                "success": True,
+                "imported": result,
+                "manifest": new_manifest,
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Помилка під час консервації бази: {str(e)}")
+        finally:
+            if temp_file and os.path.exists(temp_file.name):
+                try:
+                    os.unlink(temp_file.name)
+                except OSError:
+                    pass
 
     @app.get("/api/search")
     async def api_search(
