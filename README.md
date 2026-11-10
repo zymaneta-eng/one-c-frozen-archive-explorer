@@ -58,13 +58,11 @@
 
 ## 📸 3. Інтерфейс депозитарію (Screenshots)
 
-| Головний реєстр та миттєвий FTS5 пошук | Двосторонній Акт звірки взаєморозрахунків |
-| :---: | :---: |
-| ![Dashboard](assets/preview-dashboard.png) | ![Reconciliation](assets/preview-reconciliation.png) |
+![архів: огляд](screenshots/02_archive_overview.png)
 
-| Картка первинного документа з номенклатурою | Протокол контролю цілісності (SHA-256) |
-| :---: | :---: |
-| ![Document Card](assets/preview-document.png) | ![Integrity Protocol](assets/preview-worm.png) |
+![підсумок тестів](screenshots/01_tests.png)
+
+Усі скріншоти (17): [screenshots/](screenshots/README.md)
 
 ---
 
