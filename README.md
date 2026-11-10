@@ -62,7 +62,7 @@
 
 ![підсумок тестів](screenshots/01_tests.png)
 
-Усі скріншоти (17): [screenshots/](screenshots/README.md)
+Усі скріншоти (18): [screenshots/](screenshots/README.md)
 
 ---
 
